@@ -37,6 +37,7 @@ of the second-price auction is why Vickrey is the recommended default.
 | `src/` | The same contracts, as the working source for this repository |
 | `vectors/award-vectors.json` | Golden vectors: bids in commit order, reserve, units, expected award per mechanism |
 | `src/adapters/AwardGatedVerifier.sol` | Informative: ERC-8414 verifier that settles only when the work verifies *and* the fulfiller won the bound tender |
+| `analysis/` | Numbers and figures on commit–reveal leakage: reserve value, last-reveal ladders, phantom commitments |
 | `proofs/VickreyTruthful.lean` | Machine-checked proof that truthful bidding is weakly dominant under `award.vickrey`, for all inputs |
 | `test/SealedBidTender.t.sol` | Foundry suite, including fuzzed monotonicity and Vickrey truthfulness |
 | `test/*.test.js` | Same coverage on an in-process EVM, no Foundry needed, plus the ERC-8414 adapter end to end |
