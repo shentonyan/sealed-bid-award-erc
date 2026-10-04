@@ -25,10 +25,10 @@ async function main() {
   const terms = (over = {}) => ({
     targetRef: TARGET, mechanism: vickrey.address, reserve: 100n, units: 1n,
     commitDeadline: T0 + 100n, revealDeadline: T0 + 200n, bond: BOND, bondAsset: "0x" + "0".repeat(40),
-    slashRecipient: SINK,
+    slashRecipient: SINK, maxBidders: 16n,
     ...over,
   });
-  const asTuple = (t) => [t.targetRef, t.mechanism, t.reserve, t.units, t.commitDeadline, t.revealDeadline, t.bond, t.bondAsset, t.slashRecipient];
+  const asTuple = (t) => [t.targetRef, t.mechanism, t.reserve, t.units, t.commitDeadline, t.revealDeadline, t.bond, t.bondAsset, t.slashRecipient, t.maxBidders];
 
   // ── openTender validation ───────────────────────────────────────────────────
   await rejects(h.call(tender, "openTender", [asTuple(terms({ reserve: 0n }))]), /reserve/, "reserve 0");
@@ -97,8 +97,13 @@ async function main() {
   ok(awarded[0].args.mechanismId === (await h.call(vickrey, "mechanismId")).out[0], "mechanismId in event");
   const slashed = fin.logs.filter((l) => l.name === "BidSlashed");
   ok(slashed.length === 1 && slashed[0].args.bidder.toLowerCase() === A(4), "non-revealer slashed");
-  ok((await h.balance(SINK)) === sinkBefore + BOND, "slashed bond went to slashRecipient");
-  ok((await h.balance(tender.address)) === 0n, "contract holds nothing after finalize");
+  ok((await h.call(tender, "slashedOf", [tenderId])).out[0] === BOND, "slashed bond credited at finalize");
+  ok((await h.balance(SINK)) === sinkBefore, "nothing pushed to slashRecipient at finalize");
+  const claim = await h.call(tender, "claimSlashed", [tenderId], { from: A(9) });
+  ok(claim.logs.some((l) => l.name === "SlashClaimed"), "SlashClaimed event");
+  ok((await h.balance(SINK)) === sinkBefore + BOND, "claimSlashed paid slashRecipient");
+  ok((await h.balance(tender.address)) === 0n, "contract holds nothing after claim");
+  await rejects(h.call(tender, "claimSlashed", [tenderId]), /nothing to claim/, "double claim");
   ok((await h.call(tender, "phaseOf", [tenderId])).out[0] === 3n, "phase Awarded");
   const stored = (await h.call(tender, "awardOf", [tenderId])).out[0];
   ok(stored.length === 1 && stored[0][0].toLowerCase() === A(3) && stored[0][1] === 60n, "awardOf stored");

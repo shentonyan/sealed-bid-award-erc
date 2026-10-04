@@ -16,9 +16,14 @@ interface IERC165Minimal {
 
 /// @title SealedBidTender
 /// @notice Reference implementation of ISealedBidTender. Dependency-free.
-/// @dev Slashed bonds go to the tender's own `slashRecipient` term. The contract never acts
-///      on the target: it produces an award, and the target standard decides what to do with it.
-///      Fee-on-transfer and rebasing bond assets are not supported (see Security Considerations).
+/// @dev The contract never acts on the target: it produces an award, and the target standard
+///      decides what to do with it.
+///      - Bidders per tender are capped (`maxBidders`, at most MAX_BIDDERS) so `finalize` always
+///        fits in a block: it sorts revealed bids and loops over committers.
+///      - Slashed bonds are credited at `finalize` and paid out by `claimSlashed`, so a
+///        `slashRecipient` that rejects payment cannot block the award.
+///      - ERC-20 bonds are moved with calls that accept tokens returning no value (USDT-style).
+///      Fee-on-transfer and rebasing bond assets are rejected (see Security Considerations).
 contract SealedBidTender is ISealedBidTender {
     struct Commitment {
         bytes32 hash;
@@ -33,7 +38,11 @@ contract SealedBidTender is ISealedBidTender {
         mapping(address => Commitment) commitments;
         IAwardMechanism.Bid[] revealed; // commit order among those who revealed
         IAwardMechanism.Award[] awards;
+        uint256 slashed; // credited at finalize, paid by claimSlashed
     }
+
+    /// @notice Upper bound on `maxBidders`. At 256 revealed bids `finalize` costs about 8M gas.
+    uint256 public constant MAX_BIDDERS = 256;
 
     mapping(bytes32 => Tender) private _tenders;
     mapping(address => uint256) public nonceOf;
@@ -73,9 +82,13 @@ contract SealedBidTender is ISealedBidTender {
             IERC165Minimal(terms.mechanism).supportsInterface(type(IAwardMechanism).interfaceId),
             "not an award mechanism"
         );
+        require(terms.maxBidders >= 1 && terms.maxBidders <= MAX_BIDDERS, "maxBidders out of range");
         if (terms.bond > 0) {
             require(terms.slashRecipient != address(0), "slash recipient required");
             require(terms.slashRecipient != msg.sender, "requester cannot receive slashes");
+        }
+        if (terms.bondAsset != address(0)) {
+            require(terms.bondAsset.code.length > 0, "bond asset is not a contract");
         }
 
         tenderId = keccak256(abi.encode(block.chainid, address(this), msg.sender, nonceOf[msg.sender]++));
@@ -102,6 +115,7 @@ contract SealedBidTender is ISealedBidTender {
         require(block.timestamp <= t.terms.commitDeadline, "commit window closed");
         require(t.commitments[msg.sender].hash == bytes32(0), "already committed");
         require(commitment != bytes32(0), "empty commitment");
+        require(t.committers.length < t.terms.maxBidders, "tender full");
 
         _takeBond(t.terms, msg.sender);
 
@@ -163,7 +177,16 @@ contract SealedBidTender is ISealedBidTender {
                 emit BidSlashed(tenderId, who, t.terms.bond);
             }
         }
-        if (slashed > 0) _payBondAmount(t.terms, t.terms.slashRecipient, slashed);
+        t.slashed += slashed;
+    }
+
+    function claimSlashed(bytes32 tenderId) external exists(tenderId) nonReentrant returns (uint256 amount) {
+        Tender storage t = _tenders[tenderId];
+        amount = t.slashed;
+        require(amount > 0, "nothing to claim");
+        t.slashed = 0;
+        _payBondAmount(t.terms, t.terms.slashRecipient, amount);
+        emit SlashClaimed(tenderId, t.terms.slashRecipient, amount);
     }
 
     // ─── Views ────────────────────────────────────────────────────────────────
@@ -184,6 +207,10 @@ contract SealedBidTender is ISealedBidTender {
         Tender storage t = _tenders[tenderId];
         if (t.phase != Phase.Awarded) return new IAwardMechanism.Award[](0);
         return t.awards;
+    }
+
+    function slashedOf(bytes32 tenderId) external view exists(tenderId) returns (uint256) {
+        return _tenders[tenderId].slashed;
     }
 
     function revealedBids(bytes32 tenderId) external view exists(tenderId) returns (IAwardMechanism.Bid[] memory) {
@@ -217,7 +244,7 @@ contract SealedBidTender is ISealedBidTender {
             require(msg.value == 0, "native value not accepted");
             IERC20Minimal token = IERC20Minimal(terms.bondAsset);
             uint256 before = token.balanceOf(address(this));
-            require(token.transferFrom(from, address(this), terms.bond), "bond transfer failed");
+            _erc20Call(terms.bondAsset, abi.encodeCall(IERC20Minimal.transferFrom, (from, address(this), terms.bond)));
             require(token.balanceOf(address(this)) - before == terms.bond, "bond asset not supported");
         }
     }
@@ -232,7 +259,14 @@ contract SealedBidTender is ISealedBidTender {
             (bool ok,) = to.call{value: amount}("");
             require(ok, "bond return failed");
         } else {
-            require(IERC20Minimal(terms.bondAsset).transfer(to, amount), "bond return failed");
+            _erc20Call(terms.bondAsset, abi.encodeCall(IERC20Minimal.transfer, (to, amount)));
         }
+    }
+
+    /// @dev Calls an ERC-20 and accepts either no return data or `true`, so tokens that do not
+    ///      return a value (USDT and others) work. Reverts on failure or on `false`.
+    function _erc20Call(address token, bytes memory data) private {
+        (bool ok, bytes memory ret) = token.call(data);
+        require(ok && (ret.length == 0 || abi.decode(ret, (bool))), "bond transfer failed");
     }
 }

@@ -124,6 +124,7 @@ interface ISealedBidTender {
         uint256 bond;            // amount escrowed per commit
         address bondAsset;       // address(0) for the chain's native asset, else an ERC-20
         address slashRecipient;  // where slashed bonds go; MUST be non-zero when bond > 0
+        uint256 maxBidders;      // commitments accepted; MUST be >= 1 and within the implementation's limit
     }
 
     event TenderOpened(
@@ -141,28 +142,33 @@ interface ISealedBidTender {
     event BidSlashed(bytes32 indexed tenderId, address indexed bidder, uint256 bond);
     event TenderAwarded(bytes32 indexed tenderId, address indexed winner, uint256 price, bytes4 mechanismId);
     event TenderVoid(bytes32 indexed tenderId);
+    event SlashClaimed(bytes32 indexed tenderId, address indexed recipient, uint256 amount);
 
     function openTender(TenderTerms calldata terms) external returns (bytes32 tenderId);
     function commitBid(bytes32 tenderId, bytes32 commitment) external payable;
     function revealBid(bytes32 tenderId, uint256 amount, bytes32 salt) external;
     function finalize(bytes32 tenderId) external returns (IAwardMechanism.Award[] memory);
+    function claimSlashed(bytes32 tenderId) external returns (uint256 amount);
 
     function termsOf(bytes32 tenderId) external view returns (TenderTerms memory);
     function requesterOf(bytes32 tenderId) external view returns (address);
     function phaseOf(bytes32 tenderId) external view returns (Phase);
     function awardOf(bytes32 tenderId) external view returns (IAwardMechanism.Award[] memory);
+    function slashedOf(bytes32 tenderId) external view returns (uint256);
 }
 ```
 
 ### Tender lifecycle
 
-**Opening.** `openTender` MUST revert unless `reserve > 0`, `units >= 1`, `commitDeadline > block.timestamp`, `revealDeadline > commitDeadline`, `mechanism` reports `IAwardMechanism` through ERC-165, and either `bond == 0` or `slashRecipient != address(0)`. `slashRecipient` MUST NOT be the requester. The caller is recorded as the requester. `tenderId` MUST be `keccak256(abi.encode(block.chainid, address(this), msg.sender, nonce))` where `nonce` is a per-requester counter incremented on each call. The contract MUST emit `TenderOpened` and set the phase to `Commit`.
+**Opening.** `openTender` MUST revert unless `reserve > 0`, `units >= 1`, `commitDeadline > block.timestamp`, `revealDeadline > commitDeadline`, `mechanism` reports `IAwardMechanism` through ERC-165, either `bond == 0` or `slashRecipient != address(0)`, and `maxBidders` is at least 1 and no greater than the implementation's limit. Implementations MUST choose that limit so that `finalize` with `maxBidders` revealed bids fits well within a block's gas limit, and SHOULD expose it. If `bondAsset` is not `address(0)` it MUST be a contract. `slashRecipient` MUST NOT be the requester. The caller is recorded as the requester. `tenderId` MUST be `keccak256(abi.encode(block.chainid, address(this), msg.sender, nonce))` where `nonce` is a per-requester counter incremented on each call. The contract MUST emit `TenderOpened` and set the phase to `Commit`.
 
-**Committing.** `commitBid` MUST revert unless the phase is `Commit` and `block.timestamp <= commitDeadline`. The commitment MUST be `keccak256(abi.encode(tenderId, msg.sender, amount, salt))`; implementations MUST use `abi.encode`, not `abi.encodePacked`. An address MUST NOT commit more than once per tender. The contract MUST take `bond` in `bondAsset` from the caller (for a native-asset bond, `msg.value` MUST equal `bond`; for an ERC-20 bond, `msg.value` MUST be zero and the contract MUST pull exactly `bond` by `transferFrom`) and MUST emit `BidCommitted`.
+**Committing.** `commitBid` MUST revert unless the phase is `Commit` and `block.timestamp <= commitDeadline`. The commitment MUST be `keccak256(abi.encode(tenderId, msg.sender, amount, salt))`; implementations MUST use `abi.encode`, not `abi.encodePacked`. An address MUST NOT commit more than once per tender, and `commitBid` MUST revert once `maxBidders` commitments have been accepted. The contract MUST take `bond` in `bondAsset` from the caller (for a native-asset bond, `msg.value` MUST equal `bond`; for an ERC-20 bond, `msg.value` MUST be zero and the contract MUST pull exactly `bond` by `transferFrom`, accepting tokens that return no value) and MUST emit `BidCommitted`.
 
 **Revealing.** `revealBid` MUST revert unless `commitDeadline < block.timestamp <= revealDeadline`, the caller has an unrevealed commitment for this tender, and `keccak256(abi.encode(tenderId, msg.sender, amount, salt))` equals that commitment. On success the contract MUST record the bid, MUST emit `BidRevealed`, and MUST return the caller's bond. The phase becomes `Reveal` on the first valid reveal or, if none arrives, remains `Commit` until finalization.
 
-**Finalizing.** `finalize` is permissionless and MUST revert unless `block.timestamp > revealDeadline` and the phase is `Commit` or `Reveal`. The contract MUST call `mechanism.award(bids, reserve, units)` with the revealed bids in commit order, and MUST then check the result against conditions 2 to 4 of the award mechanism interface (no price above `reserve`, no duplicate winner, no more awards than `units`), reverting if any fails. The mechanism is a third-party contract and the tender contract is the last check before an award reaches a target. If the result is non-empty the contract MUST store it, set the phase to `Awarded`, and emit one `TenderAwarded` per winner. If the result is empty the contract MUST set the phase to `Void` and emit `TenderVoid`. In either case the contract MUST slash the bond of every committed bidder who did not reveal, emitting `BidSlashed` for each, and MUST transfer the total slashed amount to `slashRecipient`. `slashRecipient` MUST NOT be an address from which the requester can recover funds, directly or through the target. In particular it MUST NOT be the target's escrow or vault where, as under [ERC-8414](./eip-8414.md), funds sent there offset the requester's own contribution or return to the target's owner. The RECOMMENDED `slashRecipient` is a burn address.
+**Finalizing.** `finalize` is permissionless and MUST revert unless `block.timestamp > revealDeadline` and the phase is `Commit` or `Reveal`. The contract MUST call `mechanism.award(bids, reserve, units)` with the revealed bids in commit order, and MUST then check the result against conditions 2 to 4 of the award mechanism interface (no price above `reserve`, no duplicate winner, no more awards than `units`), reverting if any fails. The mechanism is a third-party contract and the tender contract is the last check before an award reaches a target. If the result is non-empty the contract MUST store it, set the phase to `Awarded`, and emit one `TenderAwarded` per winner. If the result is empty the contract MUST set the phase to `Void` and emit `TenderVoid`. In either case the contract MUST slash the bond of every committed bidder who did not reveal, emitting `BidSlashed` for each, and MUST credit the total slashed amount to the tender. `finalize` MUST NOT transfer slashed bonds itself, so that a `slashRecipient` that rejects payment cannot prevent an award.
+
+**Claiming slashed bonds.** `claimSlashed` is permissionless. It MUST revert if nothing is credited, and otherwise MUST set the credit to zero, transfer it to `slashRecipient`, and emit `SlashClaimed`. `slashedOf` MUST return the current credit. `slashRecipient` MUST NOT be an address from which the requester can recover funds, directly or through the target. In particular it MUST NOT be the target's escrow or vault where, as under [ERC-8414](./eip-8414.md), funds sent there offset the requester's own contribution or return to the target's owner. The RECOMMENDED `slashRecipient` is a burn address.
 
 **Views.** All view functions MUST revert for a `tenderId` that does not exist. `awardOf` MUST return an empty array unless the phase is `Awarded`.
 
@@ -227,6 +233,8 @@ A reference `SealedBidTender` contract and the three normative mechanism contrac
 **Collusion and correlated costs.** Agents built on the same model API have strongly correlated costs, and a bidding ring can hold the second price at the reserve. Requesters SHOULD derive the reserve from their own outside option rather than from observed past prices. Reputation layers SHOULD index `TenderAwarded` events to detect rings.
 
 **Shill bidding by the requester.** A requester can commit a bid at the reserve to push a second price toward it. Because the reserve is the requester's own declared limit, this does no harm under first-price or second-price. Uniform-price is more exposed, and implementations MAY exclude the requester's address from bidding.
+
+**Bidder cap.** `finalize` sorts the revealed bids and visits every commitment, so its cost grows faster than linearly in the number of bidders: in the reference implementation it is about 2M gas at 128 revealed bids, 8M at 256, 31M at 512 and 122M at 1,024. A bond does not prevent flooding, since a bidder who reveals recovers it, so without a cap anyone could make a tender impossible to finalize for the cost of gas. Hence the `maxBidders` term and the implementation limit. The reference implementation's limit is 256.
 
 **Timestamp manipulation.** Deadlines are block timestamps and can shift by a few seconds. Commit and reveal windows shorter than a few minutes SHOULD NOT be used.
 

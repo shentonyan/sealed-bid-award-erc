@@ -58,7 +58,8 @@ contract SealedBidTenderTest is Test {
             revealDeadline: uint64(block.timestamp + 200),
             bond: BOND,
             bondAsset: address(0),
-            slashRecipient: sink
+            slashRecipient: sink,
+            maxBidders: 16
         });
     }
 
@@ -212,8 +213,12 @@ contract SealedBidTenderTest is Test {
         assertEq(a.length, 1);
         assertEq(a[0].winner, b3);
         assertEq(a[0].price, 60);
+        assertEq(tender.slashedOf(id), BOND);
+        assertEq(tender.claimSlashed(id), BOND);
         assertEq(sink.balance, sinkBefore + BOND);
         assertEq(address(tender).balance, 0);
+        vm.expectRevert(bytes("nothing to claim"));
+        tender.claimSlashed(id);
         assertEq(uint256(tender.phaseOf(id)), uint256(ISealedBidTender.Phase.Awarded));
         assertEq(tender.awardOf(id).length, 1);
 

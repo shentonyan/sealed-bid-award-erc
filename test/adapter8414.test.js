@@ -38,8 +38,8 @@ async function main() {
   const T0 = h.now();
   const terms = (over = {}) => {
     const t = { targetRef, mechanism: vickrey.address, reserve: REWARD, units: 1n,
-      commitDeadline: T0 + 100n, revealDeadline: T0 + 200n, bond: BOND, bondAsset: ZERO, slashRecipient: SINK, ...over };
-    return [t.targetRef, t.mechanism, t.reserve, t.units, t.commitDeadline, t.revealDeadline, t.bond, t.bondAsset, t.slashRecipient];
+      commitDeadline: T0 + 100n, revealDeadline: T0 + 200n, bond: BOND, bondAsset: ZERO, slashRecipient: SINK, maxBidders: 16n, ...over };
+    return [t.targetRef, t.mechanism, t.reserve, t.units, t.commitDeadline, t.revealDeadline, t.bond, t.bondAsset, t.slashRecipient, t.maxBidders];
   };
   const open = async (t, from) => (await h.call(tender, "openTender", [t], { from })).logs[0].args.tenderId;
 
