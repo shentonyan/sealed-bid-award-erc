@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="430" viewBox="0 0 1000 430" role="img" aria-label="Sealed-bid award lifecycle: open, commit, reveal, finalize; the award crosses an authority boundary to ERC-8183, ERC-8195 and ERC-8414, each of which decides what the award may change.">
+<defs>
+<marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2a78d6"/></marker>
+<marker id="arrow-ink2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#59636e"/></marker>
+</defs>
+<rect x="16" y="16" width="640" height="398" rx="14" fill="#e8f1fc" stroke="none"/>
+<text x="34" y="46" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="14" font-weight="600" fill="#1c5cab" text-anchor="start">This ERC: produces an award, holds only bidder bonds</text>
+<rect x="34" y="64" width="290" height="128" rx="10" fill="#ffffff" stroke="#2a78d6" stroke-width="1.5"/>
+<circle cx="54" cy="86" r="11" fill="#2a78d6"/>
+<text x="54" y="90.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
+<text x="72" y="91" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="14" font-weight="600" fill="#1f2328" text-anchor="start">Open</text>
+<text x="48" y="116" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#59636e" text-anchor="start">reserve r · units · bond B</text>
+<text x="48" y="135" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#59636e" text-anchor="start">maxBidders · slashRecipient</text>
+<text x="48" y="154" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="12.5" font-weight="400" fill="#59636e" text-anchor="start">targetRef = H(chainId, contract, id)</text>
+<rect x="348" y="64" width="290" height="128" rx="10" fill="#ffffff" stroke="#2a78d6" stroke-width="1.5"/>
+<circle cx="368" cy="86" r="11" fill="#2a78d6"/>
+<text x="368" y="90.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
+<text x="386" y="91" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="14" font-weight="600" fill="#1f2328" text-anchor="start">Commit</text>
+<text x="362" y="116" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="12.5" font-weight="400" fill="#59636e" text-anchor="start">post H(tenderId, bidder, bid, salt)</text>
+<text x="362" y="135" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#59636e" text-anchor="start">lock bond B</text>
+<text x="362" y="154" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#59636e" text-anchor="start">at most maxBidders commitments</text>
+<rect x="34" y="222" width="290" height="128" rx="10" fill="#ffffff" stroke="#2a78d6" stroke-width="1.5"/>
+<circle cx="54" cy="244" r="11" fill="#2a78d6"/>
+<text x="54" y="248.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">3</text>
+<text x="72" y="249" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="14" font-weight="600" fill="#1f2328" text-anchor="start">Reveal</text>
+<text x="48" y="274" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#59636e" text-anchor="start">open (bid, salt) after commits close</text>
+<text x="48" y="293" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#59636e" text-anchor="start">bond returned on a valid reveal</text>
+<text x="48" y="312" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#59636e" text-anchor="start">reveals are public, one by one</text>
+<rect x="348" y="222" width="290" height="128" rx="10" fill="#ffffff" stroke="#2a78d6" stroke-width="1.5"/>
+<circle cx="368" cy="244" r="11" fill="#2a78d6"/>
+<text x="368" y="248.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">4</text>
+<text x="386" y="249" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="14" font-weight="600" fill="#1f2328" text-anchor="start">Finalize</text>
+<text x="362" y="274" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="12.5" font-weight="400" fill="#59636e" text-anchor="start">award(bids, r, units) → (winner, price)</text>
+<text x="362" y="293" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#59636e" text-anchor="start">re-check: price ≤ r, unique winners</text>
+<text x="362" y="312" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#59636e" text-anchor="start">unrevealed bonds credited for slashing</text>
+<line x1="324" y1="128.0" x2="344" y2="128.0" stroke="#2a78d6" stroke-width="1.6" marker-end="url(#arrow-accent)"/>
+<path d="M388 192 C 388 214, 284 200, 284 218" fill="none" stroke="#2a78d6" stroke-width="1.6" marker-end="url(#arrow-accent)"/>
+<line x1="324" y1="286.0" x2="344" y2="286.0" stroke="#2a78d6" stroke-width="1.6" marker-end="url(#arrow-accent)"/>
+<text x="34" y="376" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#59636e" text-anchor="start">Pricing rule: a swappable pure contract</text>
+<text x="34" y="395" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="12" font-weight="500" fill="#1c5cab" text-anchor="start">award.first-price · award.vickrey (recommended) · award.uniform-price</text>
+<line x1="684" y1="22" x2="684" y2="408" stroke="#b35900" stroke-width="1.6" stroke-dasharray="6 5"/>
+<text x="675" y="130" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12" font-weight="600" fill="#b35900" text-anchor="middle" transform="rotate(-90 675 130)">authority boundary</text>
+<line x1="638" y1="286.0" x2="684" y2="286.0" stroke="#59636e" stroke-width="1.6"/>
+<circle cx="684" cy="286.0" r="3.5" fill="#59636e"/>
+<text x="710" y="36" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="600" fill="#59636e" text-anchor="start">Targets decide what it changes</text>
+<path d="M684 286.0 C 698 286.0, 694 101.0, 706 101.0" fill="none" stroke="#59636e" stroke-width="1.4" marker-end="url(#arrow-ink2)"/>
+<rect x="710" y="50.0" width="274" height="102" rx="10" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.2"/>
+<text x="724" y="74.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="13.5" font-weight="600" fill="#1f2328" text-anchor="start">ERC-8183  job escrow</text>
+<text x="724" y="94.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#59636e" text-anchor="start">client calls setProvider / setBudget</text>
+<text x="724" y="111.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#59636e" text-anchor="start">a hook only checks them against</text>
+<text x="724" y="128.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#59636e" text-anchor="start">the stored award</text>
+<path d="M684 286.0 C 698 286.0, 694 232.0, 706 232.0" fill="none" stroke="#59636e" stroke-width="1.4" marker-end="url(#arrow-ink2)"/>
+<rect x="710" y="181.0" width="274" height="102" rx="10" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.2"/>
+<text x="724" y="205.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="13.5" font-weight="600" fill="#1f2328" text-anchor="start">ERC-8195  task market</text>
+<text x="724" y="225.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#59636e" text-anchor="start">Auction-mode selection reads</text>
+<text x="724" y="242.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#59636e" text-anchor="start">awardOf instead of a fixed</text>
+<text x="724" y="259.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#59636e" text-anchor="start">lowest-bid rule</text>
+<path d="M684 286.0 C 698 286.0, 694 363.0, 706 363.0" fill="none" stroke="#59636e" stroke-width="1.4" marker-end="url(#arrow-ink2)"/>
+<rect x="710" y="312.0" width="274" height="102" rx="10" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.2"/>
+<text x="724" y="336.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="13.5" font-weight="600" fill="#1f2328" text-anchor="start">ERC-8414  task tender</text>
+<text x="724" y="356.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#59636e" text-anchor="start">award gates eligibility only;</text>
+<text x="724" y="373.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#59636e" text-anchor="start">rewardPerCompletion stays fixed</text>
+<text x="724" y="390.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#59636e" text-anchor="start">(AwardGatedVerifier)</text>
+</svg>

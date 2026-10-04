@@ -8,7 +8,7 @@ cross-checked by Monte Carlo.
 ```
 pip install numpy scipy matplotlib
 python auction_numbers.py   # prints the tables, writes results.json
-python figures.py           # writes fig1_reserve.png, fig2_ladder.png, fig3_phantom.png
+python figures.py           # writes fig1_reserve.png, fig2_ladder.png, fig3_phantom.png and *_dark.png variants
 ```
 
 | Figure | What it shows |
