@@ -3,16 +3,17 @@ const solc = require("solc");
 const fs = require("fs");
 const path = require("path");
 
-const root = path.join(__dirname, "src");
+const root = __dirname;
 const sources = {};
 function walk(dir) {
   for (const f of fs.readdirSync(dir)) {
     const p = path.join(dir, f);
     if (fs.statSync(p).isDirectory()) walk(p);
-    else if (p.endsWith(".sol")) sources[path.relative(root, p)] = { content: fs.readFileSync(p, "utf8") };
+    else if (p.endsWith(".sol") && !p.endsWith(".t.sol")) sources[path.relative(root, p)] = { content: fs.readFileSync(p, "utf8") };
   }
 }
-walk(root);
+walk(path.join(root, "src"));
+walk(path.join(root, "test", "mocks"));
 
 const input = {
   language: "Solidity",

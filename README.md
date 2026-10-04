@@ -36,8 +36,11 @@ of the second-price auction is why Vickrey is the recommended default.
 | `assets/erc-draft_sealed_bid_award/` | Exactly what goes into the ERCs PR: interfaces, reference contracts, test vectors |
 | `src/` | The same contracts, as the working source for this repository |
 | `vectors/award-vectors.json` | Golden vectors: bids in commit order, reserve, units, expected award per mechanism |
+| `src/adapters/AwardGatedVerifier.sol` | Informative: ERC-8414 verifier that settles only when the work verifies *and* the fulfiller won the bound tender |
+| `proofs/VickreyTruthful.lean` | Machine-checked proof that truthful bidding is weakly dominant under `award.vickrey`, for all inputs |
 | `test/SealedBidTender.t.sol` | Foundry suite, including fuzzed monotonicity and Vickrey truthfulness |
-| `test/*.test.js` | Same coverage on an in-process EVM, no Foundry needed |
+| `test/*.test.js` | Same coverage on an in-process EVM, no Foundry needed, plus the ERC-8414 adapter end to end |
+| `test/mocks/` | Test-only stand-ins: a minimal ERC-8414 settlement path and a hashlock work verifier |
 
 ## Run without Foundry
 
@@ -76,6 +79,26 @@ slashes anyone who committed but did not reveal. Slashed bonds go to the tender'
 
 Mechanism contracts are pure. Bids reach them in commit order, and the sort inside
 `BaseAwardMechanism` is stable, which is what makes "ties go to the earlier commit" hold.
+
+## ERC-8414 adapter
+
+`AwardGatedVerifier` sits in an ERC-8414 task's acceptance-authority slot. It settles a
+submission only when an inner work verifier accepts it *and* the fulfiller of record is a
+winner of the tender bound to that task. The payout stays the task's immutable
+`rewardPerCompletion`; the award decides who may be paid, not how much. Each task token is
+bound once, by its own update authority, to a tender whose `targetRef` names that token,
+which that same authority opened, and whose reserve equals the reward. The end-to-end test
+covers: a loser's correct work is not payable, a winner's wrong proof is not payable, a
+copied result by a non-winner is not payable, a submission made before the award waits and
+then settles, and the paid amount is the reward rather than the Vickrey price.
+
+## Proof
+
+`proofs/VickreyTruthful.lean` proves in core Lean 4 (no Mathlib) that under `award.vickrey`
+bidding one's true cost is weakly dominant, for any reserve, any number of other bidders in
+any commit order, and any deviation. The brute-force test checks the contract on a grid;
+the proof removes the grid. Check it with `lean proofs/VickreyTruthful.lean`. See
+`proofs/README.md`.
 
 ## License
 
