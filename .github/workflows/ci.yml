@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  node:
+    name: EVM tests (solc 0.8.24, in-process EVM)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  foundry:
+    name: Foundry tests (incl. fuzzing)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+      - run: git clone --depth 1 https://github.com/foundry-rs/forge-std lib/forge-std
+      - run: forge test -vv
+
+  lean:
+    name: Lean proof (Vickrey truthfulness)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lean 4 v4.34.0
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain leanprover/lean4:v4.34.0
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Check proof (no sorry, standard axioms only)
+        run: |
+          lean proofs/VickreyTruthful.lean
+          ! grep -n "sorry" proofs/VickreyTruthful.lean
+          cp proofs/VickreyTruthful.lean /tmp/axioms.lean
+          echo '#print axioms VickreyAward.truthful_dominant' >> /tmp/axioms.lean
+          lean /tmp/axioms.lean | tee /tmp/axioms.txt
+          grep -q "propext, Classical.choice, Quot.sound" /tmp/axioms.txt
