@@ -72,9 +72,10 @@ worth nothing, because truthful bidding is optimal whatever the others bid.
 ### When the truthfulness result applies
 
 Truthful bidding is dominant for the award rule on its own. Whether it survives depends on
-what the target does with the award, as two readers pointed out on the
-[discussion thread](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/5).
-It holds only if the target
+what the target does with the award. SergeevDmitry showed on the discussion thread that a
+fixed reward breaks it ([post #5](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/5)), and
+chugarchugarr proposed separating price-binding from allocation-only integrations
+([post #7](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/7)). It holds only if the target
 
 - **(a)** pays the winner `Award.price`, and
 - **(b)** executes every non-empty award, with no discretion conditioned on the revealed bids.
@@ -156,6 +157,20 @@ revealed in, and a stable sort is what makes "ties go to the earlier commit" hol
   gates an already-minted token with a fixed `rewardPerCompletion`, so it accepts only
   tenders that use `award.posted-price` with the reserve equal to that reward. The award
   decides who may be paid, not how much.
+
+## Acknowledgements
+
+The integration profiles, `award.posted-price` and `AwardThenMint` came out of review on the
+[Ethereum Magicians thread](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814):
+
+- **SergeevDmitry** ([post #5](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/5)) gave the counterexample showing that ranking by bid
+  under a fixed reward is not truthful. It is now the theorem `fixed_reward_not_truthful` in
+  [`proofs/IntegrationProfiles.lean`](proofs/IntegrationProfiles.lean).
+- **chugarchugarr** ([post #7](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/7)) proposed the split into price-binding and
+  allocation-only integrations, put it as IC(award) ≠ IC(target ∘ award), and suggested
+  awarding before an ERC-8414 token is minted.
+
+Any errors in how these ideas were carried into the spec and code are the author's.
 
 ## Contributing
 

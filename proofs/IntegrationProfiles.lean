@@ -8,6 +8,7 @@
   1. If the target ranks by bid but pays a fixed reward (an allocation-only integration),
      truthful bidding is not dominant. The counterexample is the one SergeevDmitry gave on
      the Ethereum Magicians thread: reward 100, true cost 60, another bid of 50.
+     https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/5
 
   2. Under `award.posted-price`, where every bid at or below the reserve is an acceptance and
      the earliest acceptance wins at the reserve, accepting exactly when cost ≤ reserve is a

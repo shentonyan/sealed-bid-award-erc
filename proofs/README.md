@@ -35,7 +35,8 @@ finite grid; the theorem here holds for all inputs.
 
 ## `IntegrationProfiles.lean`
 
-This file states the scope of the result above. Truthfulness is a property of the award
+This file states the scope of the result above. The counterexample is the one SergeevDmitry
+gave on the [discussion thread](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/5). Truthfulness is a property of the award
 together with what the target does with it, not of the award alone.
 
 | Theorem | Statement |
