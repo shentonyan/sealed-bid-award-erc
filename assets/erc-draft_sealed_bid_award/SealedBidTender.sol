@@ -28,6 +28,7 @@ contract SealedBidTender is ISealedBidTender {
     struct Commitment {
         bytes32 hash;
         bool revealed;
+        uint256 amount; // set on reveal
     }
 
     struct Tender {
@@ -36,7 +37,7 @@ contract SealedBidTender is ISealedBidTender {
         Phase phase;
         address[] committers; // commit order
         mapping(address => Commitment) commitments;
-        IAwardMechanism.Bid[] revealed; // commit order among those who revealed
+        uint256 revealCount;
         IAwardMechanism.Award[] awards;
         uint256 slashed; // credited at finalize, paid by claimSlashed
     }
@@ -83,6 +84,15 @@ contract SealedBidTender is ISealedBidTender {
             "not an award mechanism"
         );
         require(terms.maxBidders >= 1 && terms.maxBidders <= MAX_BIDDERS, "maxBidders out of range");
+        if (terms.integrationProfile == AwardProfiles.ALLOCATION_ONLY) {
+            // With the payment fixed by the target, only a posted price is incentive compatible.
+            require(
+                IAwardMechanism(terms.mechanism).mechanismId() == AwardProfiles.POSTED_PRICE,
+                "allocation-only requires award.posted-price"
+            );
+        } else {
+            require(terms.integrationProfile == AwardProfiles.PRICE_BINDING, "unknown integration profile");
+        }
         if (terms.bond > 0) {
             require(terms.slashRecipient != address(0), "slash recipient required");
             require(terms.slashRecipient != msg.sender, "requester cannot receive slashes");
@@ -105,7 +115,8 @@ contract SealedBidTender is ISealedBidTender {
             terms.reserve,
             terms.units,
             terms.commitDeadline,
-            terms.revealDeadline
+            terms.revealDeadline,
+            terms.integrationProfile
         );
     }
 
@@ -119,7 +130,7 @@ contract SealedBidTender is ISealedBidTender {
 
         _takeBond(t.terms, msg.sender);
 
-        t.commitments[msg.sender] = Commitment({hash: commitment, revealed: false});
+        t.commitments[msg.sender] = Commitment({hash: commitment, revealed: false, amount: 0});
         t.committers.push(msg.sender);
         emit BidCommitted(tenderId, msg.sender, commitment);
     }
@@ -136,7 +147,8 @@ contract SealedBidTender is ISealedBidTender {
         require(keccak256(abi.encode(tenderId, msg.sender, amount, salt)) == c.hash, "commitment mismatch");
 
         c.revealed = true;
-        t.revealed.push(IAwardMechanism.Bid({bidder: msg.sender, amount: amount}));
+        c.amount = amount;
+        t.revealCount++;
         if (t.phase == Phase.Commit) t.phase = Phase.Reveal;
         emit BidRevealed(tenderId, msg.sender, amount);
 
@@ -153,7 +165,9 @@ contract SealedBidTender is ISealedBidTender {
         require(t.phase == Phase.Commit || t.phase == Phase.Reveal, "already finalized");
         require(block.timestamp > t.terms.revealDeadline, "reveal window still open");
 
-        result = IAwardMechanism(t.terms.mechanism).award(t.revealed, t.terms.reserve, t.terms.units);
+        // Bids reach the mechanism in commit order, not reveal order: the tie rule (and the
+        // posted-price rule) must not depend on who managed to reveal first.
+        result = IAwardMechanism(t.terms.mechanism).award(_bidsInCommitOrder(t), t.terms.reserve, t.terms.units);
         _checkAward(result, t.terms);
 
         if (result.length == 0) {
@@ -213,11 +227,22 @@ contract SealedBidTender is ISealedBidTender {
         return _tenders[tenderId].slashed;
     }
 
+    /// @notice Revealed bids in commit order, as passed to the mechanism.
     function revealedBids(bytes32 tenderId) external view exists(tenderId) returns (IAwardMechanism.Bid[] memory) {
-        return _tenders[tenderId].revealed;
+        return _bidsInCommitOrder(_tenders[tenderId]);
     }
 
     // ─── Internals ────────────────────────────────────────────────────────────
+
+    function _bidsInCommitOrder(Tender storage t) private view returns (IAwardMechanism.Bid[] memory bids) {
+        bids = new IAwardMechanism.Bid[](t.revealCount);
+        uint256 k;
+        for (uint256 i = 0; i < t.committers.length; i++) {
+            address who = t.committers[i];
+            Commitment storage c = t.commitments[who];
+            if (c.revealed) bids[k++] = IAwardMechanism.Bid({bidder: who, amount: c.amount});
+        }
+    }
 
     /// @dev Defensive re-check of the mechanism's output against the conditions the
     ///      ERC places on `award`. A mechanism that violates them cannot be trusted,
