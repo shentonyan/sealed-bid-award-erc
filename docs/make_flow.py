@@ -69,7 +69,7 @@ def build(theme):
     y1, y2 = cy + 48, cy + 48 + sh + 30
     parts.append(step(x1, y1, sw, sh, 1, "Open", [("reserve r · units · bond B", False),
                                                     ("maxBidders · slashRecipient", False),
-                                                    ("targetRef = H(chainId, contract, id)", True)], c))
+                                                    ("targetRef = H(chainId, contract, id)", True), ("profile: price-binding | allocation-only", False)], c))
     parts.append(step(x2, y1, sw, sh, 2, "Commit", [("post H(tenderId, bidder, bid, salt)", True),
                                                       ("lock bond B", False),
                                                       ("at most maxBidders commitments", False)], c))
@@ -87,8 +87,8 @@ def build(theme):
 
     # Mechanism strip
     my = y2 + sh + 14
-    parts.append(text(x1, my + 12, "Pricing rule: a swappable pure contract", 12.5, "ink2", c=c))
-    parts.append(text(x1, my + 31, "award.first-price · award.vickrey (recommended) · award.uniform-price",
+    parts.append(text(x1, my + 12, "Pricing rule (award.*): a swappable pure contract", 12.5, "ink2", c=c))
+    parts.append(text(x1, my + 31, "first-price · vickrey (recommended) · uniform-price · posted-price",
                       12, "accentInk", 500, mono=True, c=c))
 
     # Authority boundary
@@ -107,9 +107,9 @@ def build(theme):
     ty0 = 50
     gap = (H - 16 - ty0 - 3 * th) / 2
     targets = [
-        ("ERC-8183  job escrow", ["client calls setProvider / setBudget", "a hook only checks them against", "the stored award"]),
+        ("ERC-8183  job escrow", ["price-binding via an escrowing", "adapter; a client acting on its own", "is allocation-only"]),
         ("ERC-8195  task market", ["Auction-mode selection reads", "awardOf instead of a fixed", "lowest-bid rule"]),
-        ("ERC-8414  task tender", ["award gates eligibility only;", "rewardPerCompletion stays fixed", "(AwardGatedVerifier)"]),
+        ("ERC-8414  task tender", ["price-binding: mint after award", "(AwardThenMint); fixed reward:", "posted-price only"]),
     ]
     for i, (name, lines) in enumerate(targets):
         ty = ty0 + i * (th + gap)

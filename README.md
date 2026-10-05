@@ -7,7 +7,7 @@
 [![CI](https://github.com/shentonyan/sealed-bid-award-erc/actions/workflows/ci.yml/badge.svg)](https://github.com/shentonyan/sealed-bid-award-erc/actions/workflows/ci.yml)
 [![Status: pre-ERC draft](https://img.shields.io/badge/status-pre--ERC%20draft-8250df)](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814)
 [![Solidity 0.8.24](https://img.shields.io/badge/solidity-0.8.24-363636?logo=solidity)](src/)
-[![Lean 4 proof](https://img.shields.io/badge/Lean%204-proof%20checked%20in%20CI-0b7285)](proofs/VickreyTruthful.lean)
+[![Lean 4 proofs](https://img.shields.io/badge/Lean%204-proofs%20checked%20in%20CI-0b7285)](proofs/)
 [![License: CC0-1.0](https://img.shields.io/badge/license-CC0--1.0-lightgrey)](LICENSE.md)
 
 [Draft ERC](erc/erc-draft_sealed_bid_award.md) ·
@@ -43,9 +43,13 @@ the task.
    slashed if a commitment is never opened.
 2. **A stateless mechanism interface.** `award(bids, reserve, units) → [(winner, price)]`,
    with six conditions every rule must satisfy, including monotonicity and a fixed tie rule.
-3. **Three normative pricing rules.** `award.first-price`, `award.vickrey` (recommended) and
-   `award.uniform-price`, each a swappable pure contract.
-4. **One canonical target reference and an authority boundary.** An award names its target as
+3. **Four normative pricing rules.** `award.first-price`, `award.vickrey` (recommended),
+   `award.uniform-price` and `award.posted-price`, each a swappable pure contract.
+4. **Two integration profiles.** Each tender declares, before anyone commits, what its award
+   means to the target: *price-binding* (the target pays `Award.price` and executes every
+   award) or *allocation-only* (the target pays a fixed amount, so the tender must use
+   `award.posted-price`).
+5. **One canonical target reference and an authority boundary.** An award names its target as
    `keccak256(abi.encode(chainId, targetContract, targetId))`, and confers no authority over it.
 
 ## Why second-price is the default
@@ -65,9 +69,27 @@ worth nothing, because truthful bidding is optimal whatever the others bid.
   <img alt="Gain from holding k commitments and revealing last under first-price, up to about 27% of the reserve; zero under second-price." src="analysis/fig2_ladder.png" width="720">
 </picture>
 
+### When the truthfulness result applies
+
+Truthful bidding is dominant for the award rule on its own. Whether it survives depends on
+what the target does with the award, as two readers pointed out on the
+[discussion thread](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/5).
+It holds only if the target
+
+- **(a)** pays the winner `Award.price`, and
+- **(b)** executes every non-empty award, with no discretion conditioned on the revealed bids.
+
+If the target pays a fixed reward instead, ranking by bid is not incentive compatible: with
+reward 100, cost 60 and a rival bid of 50, bidding 40 wins and bidding the truth loses. The
+only rule that stays incentive compatible under a fixed payment is a posted price, so
+allocation-only tenders must use `award.posted-price`. If the requester can decline after
+seeing the bids, (b) fails, which is why the price-binding ERC-8414 route below mints only
+after the award and lets anyone trigger it.
+
 The full numbers, including the value of the reserve and the effect of phantom commitments,
 are in [`analysis/`](analysis/). The dominance property is proved for all inputs in
-[`proofs/VickreyTruthful.lean`](proofs/VickreyTruthful.lean).
+[`proofs/VickreyTruthful.lean`](proofs/VickreyTruthful.lean), and its limits in
+[`proofs/IntegrationProfiles.lean`](proofs/IntegrationProfiles.lean).
 
 ## What is checked, and where
 
@@ -75,9 +97,10 @@ Every push runs all three in [CI](.github/workflows/ci.yml).
 
 | Check | What it covers |
 | --- | --- |
-| `npm test` | Golden vectors; the six `award` conditions over an exhaustive 3-bidder grid; Vickrey dominance by brute force; the full tender lifecycle; the ERC-8414 adapter end to end |
-| `forge test` | The same lifecycle in Foundry, fuzzed monotonicity and truthfulness, and regression tests for the bidder cap, rejecting slash recipients and USDT-style bond tokens |
+| `npm test` | Golden vectors for all four rules; the six `award` conditions over an exhaustive 3-bidder grid; Vickrey dominance and posted-price acceptance dominance by brute force; the fixed-reward counterexample; the full tender lifecycle, including integration-profile checks; both ERC-8414 adapters end to end |
+| `forge test` | The same lifecycle in Foundry, fuzzed monotonicity and truthfulness, and regression tests for the bidder cap, rejecting slash recipients, USDT-style bond tokens and commit-order tie-breaking |
 | `lean proofs/VickreyTruthful.lean` | Truthful bidding is weakly dominant under `award.vickrey`, for any reserve, any number of bidders in any commit order, and any deviation; no `sorry`, standard axioms only |
+| `lean proofs/IntegrationProfiles.lean` | With a fixed reward, ranking by bid is not truthful (the counterexample above); under `award.posted-price`, accepting exactly when cost ≤ reserve is weakly dominant |
 
 ## Quick start
 
@@ -85,6 +108,7 @@ Every push runs all three in [CI](.github/workflows/ci.yml).
 npm ci && npm test                                   # no Foundry needed
 git clone --depth 1 https://github.com/foundry-rs/forge-std lib/forge-std && forge test
 lean proofs/VickreyTruthful.lean                     # any Lean 4 toolchain; tested on v4.34.0
+lean proofs/IntegrationProfiles.lean
 ```
 
 The same commands work in Windows PowerShell; run them one per line.
@@ -95,10 +119,10 @@ The same commands work in Windows PowerShell; run them one per line.
 | --- | --- |
 | [`erc/`](erc/) | The draft ERC text |
 | [`assets/erc-draft_sealed_bid_award/`](assets/erc-draft_sealed_bid_award/) | Exactly what goes into the ERCs PR: interfaces, reference contracts, test vectors |
-| [`src/`](src/) | The same contracts as the working source, plus [`adapters/AwardGatedVerifier.sol`](src/adapters/AwardGatedVerifier.sol) for ERC-8414 |
+| [`src/`](src/) | The same contracts as the working source, plus two ERC-8414 adapters in [`adapters/`](src/adapters/) |
 | [`vectors/`](vectors/) | Golden vectors: bids in commit order, reserve, units, expected award per rule |
 | [`test/`](test/) | Foundry and JS suites, and test-only mocks |
-| [`proofs/`](proofs/) | The Lean proof and how to check it |
+| [`proofs/`](proofs/) | The Lean proofs and how to check them |
 | [`analysis/`](analysis/) | Scripts, results and charts for the commit–reveal analysis |
 | [`docs/`](docs/) | The diagram above and the script that draws it |
 
@@ -117,13 +141,21 @@ unopened bonds for slashing. Three properties keep it robust:
 - **Tolerant ERC-20 handling.** Bond transfers accept tokens that return no value, such as
   USDT. Fee-on-transfer and rebasing tokens are rejected.
 
-**Mechanism contracts** are pure. Bids reach them in commit order, and a stable sort is
-what makes "ties go to the earlier commit" hold.
+**Mechanism contracts** are pure. Bids reach them in commit order, whatever order they were
+revealed in, and a stable sort is what makes "ties go to the earlier commit" hold.
 
-**`AwardGatedVerifier`** sits in an ERC-8414 task's acceptance-authority slot. It pays only
-when an inner work verifier accepts the submission *and* the fulfiller won the bound tender.
-The payout stays the task's fixed `rewardPerCompletion`; the award decides who may be paid,
-not how much.
+**Two ERC-8414 adapters**, one per integration profile:
+
+- [`AwardThenMint`](src/adapters/AwardThenMint.sol) is **price-binding**. The requester
+  escrows the reserve when opening the tender. Once it is awarded, anyone can call `settle`,
+  which mints the task token with `rewardPerCompletion = Award.price`, funds it from the
+  escrow and credits the rest back to the requester. The token's acceptance authority pays
+  only the winner, and only for work an inner verifier accepts. This is the route on which
+  truthful bidding under `award.vickrey` actually holds.
+- [`AwardGatedVerifier`](src/adapters/AwardGatedVerifier.sol) is **allocation-only**. It
+  gates an already-minted token with a fixed `rewardPerCompletion`, so it accepts only
+  tenders that use `award.posted-price` with the reserve equal to that reward. The award
+  decides who may be paid, not how much.
 
 ## Contributing
 
