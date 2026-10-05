@@ -22,6 +22,9 @@ async function main() {
 
   const ANSWER = hexlify(toUtf8Bytes("forty-two"));
   const vickrey = await h.deploy("VickreyAward");
+  const posted = await h.deploy("PostedPriceAward");
+  const PRICE_BINDING = keccak256(toUtf8Bytes("profile.price-binding")).slice(0, 10);
+  const ALLOCATION_ONLY = keccak256(toUtf8Bytes("profile.allocation-only")).slice(0, 10);
   const tender = await h.deploy("SealedBidTender");
   const adapter = await h.deploy("AwardGatedVerifier");
   const inner = await h.deploy("MockHashlockVerifier", [keccak256(ANSWER)], ["bytes32"]);
@@ -37,9 +40,10 @@ async function main() {
 
   const T0 = h.now();
   const terms = (over = {}) => {
-    const t = { targetRef, mechanism: vickrey.address, reserve: REWARD, units: 1n,
-      commitDeadline: T0 + 100n, revealDeadline: T0 + 200n, bond: BOND, bondAsset: ZERO, slashRecipient: SINK, maxBidders: 16n, ...over };
-    return [t.targetRef, t.mechanism, t.reserve, t.units, t.commitDeadline, t.revealDeadline, t.bond, t.bondAsset, t.slashRecipient, t.maxBidders];
+    const t = { targetRef, mechanism: posted.address, reserve: REWARD, units: 1n,
+      commitDeadline: T0 + 100n, revealDeadline: T0 + 200n, bond: BOND, bondAsset: ZERO, slashRecipient: SINK, maxBidders: 16n,
+      integrationProfile: ALLOCATION_ONLY, ...over };
+    return [t.targetRef, t.mechanism, t.reserve, t.units, t.commitDeadline, t.revealDeadline, t.bond, t.bondAsset, t.slashRecipient, t.maxBidders, t.integrationProfile];
   };
   const open = async (t, from) => (await h.call(tender, "openTender", [t], { from })).logs[0].args.tenderId;
 
@@ -47,31 +51,36 @@ async function main() {
   const wrongTarget = await open(terms({ targetRef: "0x" + "11".repeat(32) }), A(1));
   const wrongReserve = await open(terms({ reserve: 90n }), A(1));
   const rigged = await open(terms(), A(9)); // same target, opened by an outsider
+  // A price-binding Vickrey tender for a fixed-reward token: the price would be discarded,
+  // so truthful bidding would not hold. Binding must refuse it.
+  const ranked = await open(terms({ mechanism: vickrey.address, integrationProfile: PRICE_BINDING }), A(1));
 
   // ── Binding rules ─────────────────────────────────────────────────────────────
   await rejects(h.call(adapter, "bind", [task.address, TOKEN, tender.address, good, inner.address], { from: A(9) }), /only update authority/, "outsider cannot bind");
   await rejects(h.call(adapter, "bind", [task.address, TOKEN, tender.address, wrongTarget, inner.address], { from: A(1) }), /targets another task/, "tender for another target");
   await rejects(h.call(adapter, "bind", [task.address, TOKEN, tender.address, rigged, inner.address], { from: A(1) }), /not opened by task authority/, "tender opened by someone else");
   await rejects(h.call(adapter, "bind", [task.address, TOKEN, tender.address, wrongReserve, inner.address], { from: A(1) }), /reserve must equal reward/, "reserve differs from reward");
+  await rejects(h.call(adapter, "bind", [task.address, TOKEN, tender.address, ranked, inner.address], { from: A(1) }), /must be allocation-only/, "fixed reward cannot bind a bid-ranking tender");
   const bound = await h.call(adapter, "bind", [task.address, TOKEN, tender.address, good, inner.address], { from: A(1) });
   ok(bound.logs.some((l) => l.name === "Bound"), "bind succeeds for the authority's own tender");
   await rejects(h.call(adapter, "bind", [task.address, TOKEN, tender.address, good, inner.address], { from: A(1) }), /already bound/, "binding is once only");
 
-  // ── Tender: A2 bids 60, A3 bids 40 → A3 wins ────────────────────────────────────
-  await h.call(tender, "commitBid", [good, commitment(good, A(2), 60n, salt(2))], { from: A(2), value: BOND });
-  await h.call(tender, "commitBid", [good, commitment(good, A(3), 40n, salt(3))], { from: A(3), value: BOND });
+  // ── Tender (posted price 100): A3 accepts first, A2 accepts second → A3 wins ──────
+  // Under posted price a bid is an acceptance; bidders bid the reserve.
+  await h.call(tender, "commitBid", [good, commitment(good, A(3), REWARD, salt(3))], { from: A(3), value: BOND });
+  await h.call(tender, "commitBid", [good, commitment(good, A(2), REWARD, salt(2))], { from: A(2), value: BOND });
 
   // Work submitted before the award: settlement fails, but the submission is not rejected.
   const early = (await h.call(task, "submitFulfillment", [TOKEN, resultFor(A(3))], { from: A(3) })).logs[0].args.submissionId;
   await rejects(h.call(task, "settleFulfillment", [TOKEN, early, ANSWER]), /proof does not establish/, "no settlement before award");
 
   h.warp(T0 + 150n);
-  await h.call(tender, "revealBid", [good, 60n, salt(2)], { from: A(2) });
-  await h.call(tender, "revealBid", [good, 40n, salt(3)], { from: A(3) });
+  await h.call(tender, "revealBid", [good, REWARD, salt(2)], { from: A(2) });
+  await h.call(tender, "revealBid", [good, REWARD, salt(3)], { from: A(3) });
   h.warp(T0 + 201n);
   const fin = await h.call(tender, "finalize", [good]);
   const aw = fin.logs.find((l) => l.name === "TenderAwarded").args;
-  ok(aw.winner.toLowerCase() === A(3) && aw.price === 60n, "A3 wins; Vickrey price 60");
+  ok(aw.winner.toLowerCase() === A(3) && aw.price === REWARD, "earliest acceptance wins at the posted price");
   ok((await h.call(adapter, "isWinner", [task.address, TOKEN, A(3)])).out[0] === true, "isWinner(A3)");
   ok((await h.call(adapter, "isWinner", [task.address, TOKEN, A(2)])).out[0] === false, "not isWinner(A2)");
 
@@ -89,7 +98,7 @@ async function main() {
   const before = await h.balance(A(3));
   const settled = await h.call(task, "settleFulfillment", [TOKEN, early, ANSWER], { from: A(9) });
   const paid = settled.logs.find((l) => l.name === "FulfillmentAccepted").args.reward;
-  ok(paid === REWARD, "paid the task's fixed reward (100), not the Vickrey price (60)");
+  ok(paid === REWARD && paid === aw.price, "paid the task's fixed reward, which equals the posted price");
   ok((await h.balance(A(3))) === before + REWARD, "winner received the reward");
 
   // ── The adapter refuses to be driven by anyone but the task itself ──────────────

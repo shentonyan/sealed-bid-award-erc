@@ -45,13 +45,20 @@ interface ITaskTenderTerms {
 ///      boundary: the award only narrows who may be paid; it never changes the task's
 ///      reward, which stays the immutable `rewardPerCompletion`.
 ///
+///      Because the reward is fixed, this is an allocation-only integration, and the bound
+///      tender MUST use award.posted-price. A bid-ranking rule on a fixed reward is not
+///      incentive compatible: every bidder below the reward would bid the minimum and the
+///      award would go to whoever committed first. For price discovery on 8414 use
+///      AwardThenMint, which mints the token with rewardPerCompletion = Award.price.
+///
 ///      Binding rules, all checked once at `bind` and fixed thereafter:
 ///        - only the task token's update authority may bind, and only once per token;
 ///        - the tender's `targetRef` MUST equal keccak256(abi.encode(chainid, taskContract, bytes32(tokenId)));
 ///        - the tender's requester MUST be that same update authority, so nobody can bind a
 ///          token to a tender they opened and won themselves;
-///        - the tender's reserve MUST equal the task's `rewardPerCompletion`, the pattern the
-///          draft ERC recommends for targets with an immutable reward;
+///        - the tender MUST be allocation-only and use award.posted-price;
+///        - the tender's reserve MUST equal the task's `rewardPerCompletion`, so the posted
+///          price is the reward;
 ///        - the tender's `units` MUST NOT exceed `maxCompletions` when that is bounded.
 ///
 ///      A `false` return is not a rejection under ERC-8414: the submission stays pending and
@@ -97,6 +104,11 @@ contract AwardGatedVerifier is ITaskVerifier {
         ISealedBidTender.TenderTerms memory terms = t.termsOf(tenderId);
         require(terms.targetRef == targetRefFor(taskContract, tokenId), "tender targets another task");
         require(t.requesterOf(tenderId) == authority, "tender not opened by task authority");
+        require(terms.integrationProfile == AwardProfiles.ALLOCATION_ONLY, "tender must be allocation-only");
+        require(
+            IAwardMechanism(terms.mechanism).mechanismId() == AwardProfiles.POSTED_PRICE,
+            "tender must use award.posted-price"
+        );
 
         ITaskTenderTerms.TenderTerms memory task = ITaskTenderTerms(taskContract).tenderTermsOf(tokenId);
         require(terms.reserve == task.rewardPerCompletion, "reserve must equal reward");

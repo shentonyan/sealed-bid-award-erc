@@ -7,7 +7,7 @@
   },
   "scripts": {
     "compile": "node compile.js",
-    "test": "node compile.js && node test/mechanisms.test.js && node test/tender.test.js && node test/adapter8414.test.js"
+    "test": "node compile.js && node test/mechanisms.test.js && node test/tender.test.js && node test/adapter8414.test.js && node test/awardThenMint.test.js"
   },
   "license": "CC0-1.0",
   "dependencies": {
