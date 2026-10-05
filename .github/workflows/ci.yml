@@ -27,7 +27,7 @@ jobs:
       - run: forge test -vv
 
   lean:
-    name: Lean proof (Vickrey truthfulness)
+    name: Lean proofs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,11 +36,15 @@ jobs:
           curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
             | sh -s -- -y --default-toolchain leanprover/lean4:v4.34.0
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
-      - name: Check proof (no sorry, standard axioms only)
+      - name: Check proofs (no sorry, standard axioms only)
         run: |
-          lean proofs/VickreyTruthful.lean
-          ! grep -n "sorry" proofs/VickreyTruthful.lean
-          cp proofs/VickreyTruthful.lean /tmp/axioms.lean
-          echo '#print axioms VickreyAward.truthful_dominant' >> /tmp/axioms.lean
-          lean /tmp/axioms.lean | tee /tmp/axioms.txt
-          grep -q "propext, Classical.choice, Quot.sound" /tmp/axioms.txt
+          for f in proofs/*.lean; do lean "$f"; done
+          ! grep -n "sorry" proofs/*.lean
+          cp proofs/VickreyTruthful.lean /tmp/v.lean
+          echo '#print axioms VickreyAward.truthful_dominant' >> /tmp/v.lean
+          cp proofs/IntegrationProfiles.lean /tmp/p.lean
+          printf '%s\n' '#print axioms IntegrationProfiles.posted_price_acceptance_dominant' \
+                         '#print axioms IntegrationProfiles.fixed_reward_not_truthful' >> /tmp/p.lean
+          (lean /tmp/v.lean; lean /tmp/p.lean) | tee /tmp/axioms.txt
+          ! grep -q "sorryAx" /tmp/axioms.txt
+          grep -q "truthful_dominant' depends on axioms: \[propext, Classical.choice, Quot.sound\]" /tmp/axioms.txt
