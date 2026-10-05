@@ -18,6 +18,7 @@ async function main() {
     "award.first-price": await h.deploy("FirstPriceAward"),
     "award.vickrey": await h.deploy("VickreyAward"),
     "award.uniform-price": await h.deploy("UniformPriceAward"),
+    "award.posted-price": await h.deploy("PostedPriceAward"),
   };
   const award = async (m, bids, reserve = R, units = 1n) =>
     norm((await h.call(mech[m], "award", [bids.map(([b, a]) => [b, a]), reserve, units])).out);
@@ -47,6 +48,7 @@ async function main() {
         "award.first-price": [{ winner: A(2), price: 40n }],
         "award.vickrey": [{ winner: A(2), price: 55n }],
         "award.uniform-price": [{ winner: A(2), price: 55n }],
+        "award.posted-price": [{ winner: A(1), price: 100n }],
       },
     },
     {
@@ -56,12 +58,13 @@ async function main() {
         "award.first-price": [{ winner: A(1), price: 60n }],
         "award.vickrey": [{ winner: A(1), price: 100n }],
         "award.uniform-price": [{ winner: A(1), price: 100n }],
+        "award.posted-price": [{ winner: A(1), price: 100n }],
       },
     },
     {
       name: "lowest bid above reserve: no award",
       bids: [[A(1), 120n], [A(2), 150n]], reserve: 100n, units: 1n,
-      expect: { "award.first-price": [], "award.vickrey": [], "award.uniform-price": [] },
+      expect: { "award.first-price": [], "award.vickrey": [], "award.uniform-price": [], "award.posted-price": [] },
     },
     {
       name: "second-lowest above reserve: Vickrey price capped at reserve",
@@ -70,6 +73,7 @@ async function main() {
         "award.first-price": [{ winner: A(2), price: 80n }],
         "award.vickrey": [{ winner: A(2), price: 100n }],
         "award.uniform-price": [{ winner: A(2), price: 100n }],
+        "award.posted-price": [{ winner: A(2), price: 100n }],
       },
     },
     {
@@ -79,12 +83,13 @@ async function main() {
         "award.first-price": [{ winner: A(1), price: 50n }],
         "award.vickrey": [{ winner: A(1), price: 50n }],
         "award.uniform-price": [{ winner: A(1), price: 50n }],
+        "award.posted-price": [{ winner: A(1), price: 100n }],
       },
     },
     {
       name: "no bids at all",
       bids: [], reserve: 100n, units: 1n,
-      expect: { "award.first-price": [], "award.vickrey": [], "award.uniform-price": [] },
+      expect: { "award.first-price": [], "award.vickrey": [], "award.uniform-price": [], "award.posted-price": [] },
     },
     {
       name: "three units, five bidders, clearing price is the fourth bid",
@@ -92,6 +97,7 @@ async function main() {
       expect: {
         "award.first-price": [{ winner: A(2), price: 30n }, { winner: A(4), price: 45n }, { winner: A(3), price: 60n }],
         "award.uniform-price": [{ winner: A(2), price: 75n }, { winner: A(4), price: 75n }, { winner: A(3), price: 75n }],
+        "award.posted-price": [{ winner: A(1), price: 100n }, { winner: A(2), price: 100n }, { winner: A(3), price: 100n }],
       },
     },
     {
@@ -100,6 +106,7 @@ async function main() {
       expect: {
         "award.first-price": [{ winner: A(1), price: 30n }, { winner: A(2), price: 45n }],
         "award.uniform-price": [{ winner: A(1), price: 100n }, { winner: A(2), price: 100n }],
+        "award.posted-price": [{ winner: A(1), price: 100n }, { winner: A(2), price: 100n }],
       },
     },
     {
@@ -108,6 +115,7 @@ async function main() {
       expect: {
         "award.first-price": [{ winner: A(1), price: 30n }, { winner: A(2), price: 45n }],
         "award.uniform-price": [{ winner: A(1), price: 100n }, { winner: A(2), price: 100n }],
+        "award.posted-price": [{ winner: A(1), price: 100n }, { winner: A(2), price: 100n }],
       },
     },
   ];
@@ -152,6 +160,7 @@ async function main() {
           assert(bid <= R, `${m}: winner above reserve`);
           assert(w.price <= R, `${m}: price above reserve`);
           if (m === "award.first-price") assert(w.price === bid, "first-price pays own bid");
+          if (m === "award.posted-price") assert(w.price === R, "posted-price pays the reserve");
           else assert(w.price >= bid, `${m}: winner never paid less than own bid`);
         }
         // Monotonicity: lowering any one bid must not remove that bidder from the award.
@@ -199,6 +208,38 @@ async function main() {
     const uT = util(await award("award.first-price", truthful), A(1), 40n);
     const uD = util(await award("award.first-price", [[A(1), 79n], [A(2), 80n], [A(3), 90n]]), A(1), 40n);
     ok(uD > uT, "first-price rewards shading (control check)");
+  }
+
+  // ── Posted price: accepting iff cost <= reserve is dominant ───────────────────
+  // Under award.posted-price a bid is an acceptance. The truthful action is to accept (bid R)
+  // when cost <= R and decline (bid above R) otherwise. No deviation, at any commit position,
+  // can do better.
+  let pchecks = 0;
+  const DECLINE = 120n;
+  for (const costs of profiles) {
+    for (let i = 0; i < 3; i++) {
+      const others = costs.map((c, j) => [A(j + 1), c <= R ? R : DECLINE]); // others play truthfully
+      const truthfulBid = costs[i] <= R ? R : DECLINE;
+      const play = (b) => others.map(([a, x], j) => (j === i ? [a, b] : [a, x]));
+      const uT = util(await award("award.posted-price", play(truthfulBid)), A(i + 1), costs[i]);
+      for (const dev of grid) {
+        const uD = util(await award("award.posted-price", play(dev)), A(i + 1), costs[i]);
+        assert(uT >= uD, `posted-price acceptance not dominant: costs=${costs} i=${i} dev=${dev}`);
+        pchecks++;
+      }
+    }
+  }
+  passed++;
+  console.log(`posted-price dominance checks: ${pchecks}`);
+
+  // ── Fixed reward + bid ranking is not truthful (SergeevDmitry's example) ───────
+  // Ranking by bid but paying a fixed reward of 100: cost 60 against a bid of 50.
+  {
+    const fixedUtil = (out, who, cost) => (out.some((x) => x.winner === who.toLowerCase()) ? 100n - cost : 0n);
+    const truthful = await award("award.first-price", [[A(1), 60n], [A(2), 50n]]);
+    const shaded = await award("award.first-price", [[A(1), 40n], [A(2), 50n]]);
+    ok(fixedUtil(truthful, A(1), 60n) === 0n && fixedUtil(shaded, A(1), 60n) === 40n,
+      "fixed reward with bid ranking rewards underbidding (counterexample)");
   }
 
   console.log(`mechanisms: ${passed} assertions passed`);

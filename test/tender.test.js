@@ -8,6 +8,9 @@ const TARGET_CONTRACT = "0x6000000000000000000000000000000000000006";
 const TARGET_ID = "0x" + "ab".repeat(32);
 const TARGET = keccak256(coder.encode(["uint256", "address", "bytes32"], [1n, TARGET_CONTRACT, TARGET_ID]));
 const BOND = 10n ** 18n;
+const { toUtf8Bytes } = require("ethers");
+const PRICE_BINDING = keccak256(toUtf8Bytes("profile.price-binding")).slice(0, 10);
+const ALLOCATION_ONLY = keccak256(toUtf8Bytes("profile.allocation-only")).slice(0, 10);
 const salt = (i) => "0x" + (0x5000 + i).toString(16).padStart(64, "0");
 const commitment = (tenderId, bidder, amount, s) =>
   keccak256(coder.encode(["bytes32", "address", "uint256", "bytes32"], [tenderId, bidder, amount, s]));
@@ -25,10 +28,10 @@ async function main() {
   const terms = (over = {}) => ({
     targetRef: TARGET, mechanism: vickrey.address, reserve: 100n, units: 1n,
     commitDeadline: T0 + 100n, revealDeadline: T0 + 200n, bond: BOND, bondAsset: "0x" + "0".repeat(40),
-    slashRecipient: SINK, maxBidders: 16n,
+    slashRecipient: SINK, maxBidders: 16n, integrationProfile: PRICE_BINDING,
     ...over,
   });
-  const asTuple = (t) => [t.targetRef, t.mechanism, t.reserve, t.units, t.commitDeadline, t.revealDeadline, t.bond, t.bondAsset, t.slashRecipient, t.maxBidders];
+  const asTuple = (t) => [t.targetRef, t.mechanism, t.reserve, t.units, t.commitDeadline, t.revealDeadline, t.bond, t.bondAsset, t.slashRecipient, t.maxBidders, t.integrationProfile];
 
   // ── openTender validation ───────────────────────────────────────────────────
   await rejects(h.call(tender, "openTender", [asTuple(terms({ reserve: 0n }))]), /reserve/, "reserve 0");
@@ -39,6 +42,12 @@ async function main() {
   await rejects(h.call(tender, "openTender", [asTuple(terms({ slashRecipient: "0x" + "0".repeat(40) }))]), /slash recipient required/, "no slash recipient with bond");
   await rejects(h.call(tender, "openTender", [asTuple(terms({ slashRecipient: A(1) }))], { from: A(1) }), /requester cannot receive/, "requester as slash recipient");
   ok((await h.call(tender, "openTender", [asTuple(terms({ bond: 0n, slashRecipient: "0x" + "0".repeat(40) }))], { from: A(1) })).logs.length === 1, "zero bond needs no slash recipient");
+  // Integration profiles: unknown ids are rejected; allocation-only requires award.posted-price.
+  const posted = await h.deploy("PostedPriceAward");
+  await rejects(h.call(tender, "openTender", [asTuple(terms({ integrationProfile: "0xdeadbeef" }))]), /unknown integration profile/, "unknown profile");
+  await rejects(h.call(tender, "openTender", [asTuple(terms({ integrationProfile: ALLOCATION_ONLY }))]), /allocation-only requires award.posted-price/, "allocation-only with vickrey");
+  const ao = await h.call(tender, "openTender", [asTuple(terms({ integrationProfile: ALLOCATION_ONLY, mechanism: posted.address }))], { from: A(1) });
+  ok(ao.logs[0].args.integrationProfile === ALLOCATION_ONLY, "allocation-only + posted-price opens; profile in event");
   // targetRefOf matches the spec formula
   ok((await h.call(tender, "targetRefOf", [1n, TARGET_CONTRACT, TARGET_ID])).out[0] === TARGET, "targetRefOf = keccak(abi.encode(chainId, contract, id))");
 
@@ -51,7 +60,7 @@ async function main() {
   ok((await h.call(tender, "requesterOf", [tenderId])).out[0].toLowerCase() === A(1), "requesterOf");
 
   // tenderId is deterministic per spec
-  const expectedId = keccak256(coder.encode(["uint256", "address", "address", "uint256"], [1n, tender.address, A(1), 1n]));
+  const expectedId = keccak256(coder.encode(["uint256", "address", "address", "uint256"], [1n, tender.address, A(1), 2n]));
   ok(tenderId === expectedId, "tenderId = keccak(chainid, this, requester, nonce)");
 
   // Bidders 2,3,4 commit; bidder 2 bids 60, bidder 3 bids 40, bidder 4 will never reveal.
@@ -138,6 +147,21 @@ async function main() {
   await rejects(h.call(tender, "commitBid", [id4, commitment(id4, A(2), 10n, salt(2))], { from: A(2), value: 1n }), /no bond expected/, "value with zero bond");
   await h.call(tender, "commitBid", [id4, commitment(id4, A(2), 10n, salt(2))], { from: A(2) });
   passed++;
+
+  // ── Commit order, not reveal order, decides ties ─────────────────────────────
+  // A(2) commits first but reveals last; with equal bids it must still win.
+  const t5 = terms({ commitDeadline: h.now() + 100n, revealDeadline: h.now() + 200n });
+  const id5 = (await h.call(tender, "openTender", [asTuple(t5)], { from: A(1) })).logs[0].args.tenderId;
+  await h.call(tender, "commitBid", [id5, commitment(id5, A(2), 50n, salt(2))], { from: A(2), value: BOND });
+  await h.call(tender, "commitBid", [id5, commitment(id5, A(3), 50n, salt(3))], { from: A(3), value: BOND });
+  h.warp(t5.commitDeadline + 1n);
+  await h.call(tender, "revealBid", [id5, 50n, salt(3)], { from: A(3) });
+  await h.call(tender, "revealBid", [id5, 50n, salt(2)], { from: A(2) });
+  const order = (await h.call(tender, "revealedBids", [id5])).out[0].map((b) => b[0].toLowerCase());
+  ok(order[0] === A(2) && order[1] === A(3), "revealedBids are in commit order");
+  h.warp(t5.revealDeadline + 1n);
+  const fin5 = await h.call(tender, "finalize", [id5]);
+  ok(fin5.logs.find((l) => l.name === "TenderAwarded").args.winner.toLowerCase() === A(2), "tie goes to the earlier commit even when it reveals later");
 
   // ── Views revert on unknown id ──────────────────────────────────────────────
   await rejects(h.call(tender, "phaseOf", ["0x" + "00".repeat(32)]), /no such tender/, "unknown id");

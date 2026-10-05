@@ -67,7 +67,8 @@ contract HardeningTest is Test {
             bond: BOND,
             bondAsset: asset,
             slashRecipient: recipient,
-            maxBidders: maxBidders
+            maxBidders: maxBidders,
+            integrationProfile: AwardProfiles.PRICE_BINDING
         });
     }
 

@@ -3,6 +3,18 @@ pragma solidity ^0.8.24;
 
 import "./IAwardMechanism.sol";
 
+/// @notice Identifiers for what an award means to the target that consumes it.
+/// @dev price-binding: the target pays Award.price and executes every non-empty award, with no
+///      discretion conditioned on revealed bids. Only under this profile do the incentive
+///      properties of the pricing rules (e.g. truthful bidding under award.vickrey) carry over.
+///      allocation-only: the target uses Award.winner and fixes the payment itself, or keeps
+///      discretion over execution. Such tenders MUST use award.posted-price.
+library AwardProfiles {
+    bytes4 internal constant PRICE_BINDING = bytes4(keccak256("profile.price-binding"));
+    bytes4 internal constant ALLOCATION_ONLY = bytes4(keccak256("profile.allocation-only"));
+    bytes4 internal constant POSTED_PRICE = bytes4(keccak256("award.posted-price"));
+}
+
 /// @title ISealedBidTender
 /// @notice Sealed-bid tender lifecycle: commit, reveal, award. Holds bidder bonds only;
 ///         never holds the task reward.
@@ -26,6 +38,7 @@ interface ISealedBidTender {
         address bondAsset; // address(0) for the chain's native asset, else an ERC-20
         address slashRecipient; // where slashed bonds go; MUST be non-zero when bond > 0
         uint256 maxBidders; // commitments accepted per tender; MUST be >= 1 and <= the implementation's limit
+        bytes4 integrationProfile; // AwardProfiles.PRICE_BINDING or AwardProfiles.ALLOCATION_ONLY
     }
 
     event TenderOpened(
@@ -36,7 +49,8 @@ interface ISealedBidTender {
         uint256 reserve,
         uint256 units,
         uint64 commitDeadline,
-        uint64 revealDeadline
+        uint64 revealDeadline,
+        bytes4 integrationProfile
     );
     event BidCommitted(bytes32 indexed tenderId, address indexed bidder, bytes32 commitment);
     event BidRevealed(bytes32 indexed tenderId, address indexed bidder, uint256 amount);

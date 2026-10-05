@@ -8,6 +8,7 @@ import "../src/SealedBidTender.sol";
 import "../src/mechanisms/FirstPriceAward.sol";
 import "../src/mechanisms/VickreyAward.sol";
 import "../src/mechanisms/UniformPriceAward.sol";
+import "../src/mechanisms/PostedPriceAward.sol";
 
 /// @dev Mirrors test/mechanisms.test.js and test/tender.test.js for anyone running Foundry.
 contract SealedBidTenderTest is Test {
@@ -59,7 +60,8 @@ contract SealedBidTenderTest is Test {
             bond: BOND,
             bondAsset: address(0),
             slashRecipient: sink,
-            maxBidders: 16
+            maxBidders: 16,
+            integrationProfile: AwardProfiles.PRICE_BINDING
         });
     }
 
@@ -287,5 +289,65 @@ contract SealedBidTenderTest is Test {
         vm.prank(b2);
         vm.expectRevert(bytes("reveal window closed"));
         tender.revealBid(id, 60, bytes32(uint256(2)));
+    }
+
+    // ── integration profiles and posted price ───────────────────────────────────
+
+    function test_postedPrice_earliestAcceptancesWinAtReserve() public {
+        PostedPriceAward pp = new PostedPriceAward();
+        IAwardMechanism.Bid[] memory b = _bids(4);
+        b[0] = IAwardMechanism.Bid(b1, 150); // declines (above reserve)
+        b[1] = IAwardMechanism.Bid(b2, 100);
+        b[2] = IAwardMechanism.Bid(b3, 10); // a low bid is just an acceptance: it does not jump the queue
+        b[3] = IAwardMechanism.Bid(b4, 100);
+        IAwardMechanism.Award[] memory a = pp.award(b, RESERVE, 2);
+        assertEq(a.length, 2);
+        assertEq(a[0].winner, b2);
+        assertEq(a[1].winner, b3);
+        assertEq(a[0].price, RESERVE);
+        assertEq(a[1].price, RESERVE);
+    }
+
+    /// Under posted price, accepting iff cost <= reserve is dominant, at any commit position.
+    function testFuzz_postedPriceAcceptance(uint8 cost, uint8 dev, uint8 other, bool first) public {
+        PostedPriceAward pp = new PostedPriceAward();
+        uint256 r = 128;
+        uint256 truthful = cost <= r ? r : 255;
+        IAwardMechanism.Bid[] memory b = _bids(2);
+        uint256 me = first ? 0 : 1;
+        b[1 - me] = IAwardMechanism.Bid(b2, other);
+        b[me] = IAwardMechanism.Bid(b1, truthful);
+        int256 uT = _util(pp.award(b, r, 1), b1, cost);
+        b[me] = IAwardMechanism.Bid(b1, dev);
+        int256 uD = _util(pp.award(b, r, 1), b1, cost);
+        assertGe(uT, uD);
+    }
+
+    function test_allocationOnlyRequiresPostedPrice() public {
+        ISealedBidTender.TenderTerms memory t = _terms();
+        t.integrationProfile = AwardProfiles.ALLOCATION_ONLY;
+        vm.expectRevert(bytes("allocation-only requires award.posted-price"));
+        tender.openTender(t);
+        t.mechanism = address(new PostedPriceAward());
+        tender.openTender(t);
+        t.integrationProfile = bytes4(0xdeadbeef);
+        vm.expectRevert(bytes("unknown integration profile"));
+        tender.openTender(t);
+    }
+
+    /// Ties follow commit order even when the earlier committer reveals last.
+    function test_tieFollowsCommitOrderNotRevealOrder() public {
+        ISealedBidTender.TenderTerms memory t = _terms();
+        vm.prank(requester);
+        bytes32 id = tender.openTender(t);
+        _commit(id, b2, 50, bytes32(uint256(2)));
+        _commit(id, b3, 50, bytes32(uint256(3)));
+        vm.warp(t.commitDeadline + 1);
+        vm.prank(b3);
+        tender.revealBid(id, 50, bytes32(uint256(3)));
+        vm.prank(b2);
+        tender.revealBid(id, 50, bytes32(uint256(2)));
+        vm.warp(t.revealDeadline + 1);
+        assertEq(tender.finalize(id)[0].winner, b2);
     }
 }
