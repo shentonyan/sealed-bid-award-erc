@@ -6,6 +6,9 @@ pragma solidity ^0.8.24;
 ///      permissionless, the task calls `verifyFulfillment` on its acceptance authority, a
 ///      false return reverts settlement without rejecting, and the payout is the fixed
 ///      `rewardPerCompletion`. Not a conforming ERC-8414 implementation.
+///      ERC-8414 leaves minting to the implementation. This mock gives each address a minter
+///      namespace: an id whose top 160 bits are non-zero can be minted only by the address in
+///      those bits. Ids below 2**96 are open to anyone.
 interface IVerifier {
     function verifyFulfillment(address, uint256, uint256, address, bytes32, bytes calldata) external returns (bool);
     function supportsInterface(bytes4) external view returns (bool);
@@ -44,6 +47,8 @@ contract MockTaskToken {
         payable
     {
         require(updateAuthorityOf[tokenId] == address(0), "exists");
+        uint256 ns = tokenId >> 96;
+        require(ns == 0 || ns == uint256(uint160(msg.sender)), "not your namespace");
         updateAuthorityOf[tokenId] = updateAuthority;
         acceptanceAuthorityOf[tokenId] = acceptanceAuthority;
         _terms[tokenId] = TenderTerms(address(0), reward, maxCompletions, 0, 0, 0, 0, 1 days);

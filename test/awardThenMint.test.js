@@ -30,19 +30,26 @@ async function main() {
   const PRICE_BINDING = keccak256(toUtf8Bytes("profile.price-binding")).slice(0, 10);
 
   const TASK_HASH = keccak256(toUtf8Bytes("task package v1"));
-  const TOKEN = BigInt(TASK_HASH);
+  const TOKEN = (await h.call(atm, "nextTokenId", [])).out[0];
+  ok(TOKEN >> 96n === BigInt(atm.address), "token id lies in the adapter's minter namespace");
   const T0 = h.now();
   const openArgs = (hash) => [task.address, hash, inner.address, vickrey.address, T0 + 100n, T0 + 200n, BOND, SINK, 16n];
 
   // ── Requester A1 opens and escrows the reserve ────────────────────────────────
   const opened = await h.call(atm, "open", openArgs(TASK_HASH), { from: A(1), value: RESERVE });
   const tenderId = opened.out[0];
+  ok(opened.logs.find((l) => l.name === "JobOpened").args.taskHash === TASK_HASH, "task hash recorded at open");
   ok((await h.balance(atm.address)) === RESERVE, "reserve escrowed in the adapter");
   const terms = (await h.call(tender, "termsOf", [tenderId])).out[0];
   ok(terms.integrationProfile === PRICE_BINDING, "tender is price-binding");
   ok(terms.reserve === RESERVE, "reserve equals the escrow");
-  ok(terms.targetRef === keccak256(coder.encode(["uint256", "address", "bytes32"], [1n, task.address, TASK_HASH])), "targetRef names the task before it is minted");
-  await rejects(h.call(atm, "open", openArgs(TASK_HASH), { from: A(1), value: RESERVE }), /already tendered/, "one tender per task");
+  ok(terms.targetRef === keccak256(coder.encode(["uint256", "address", "bytes32"], [1n, task.address, "0x" + TOKEN.toString(16).padStart(64, "0")])), "targetRef is canonical for the token to be minted");
+  ok((await h.call(atm, "nextTokenId", [])).out[0] === TOKEN + 1n, "next job gets a fresh id");
+
+  // ── The reserved id cannot be pre-empted (execution-binding) ─────────────────────
+  for (const squatter of [A(1), A(3), A(9)]) {
+    await rejects(h.call(task, "mint", [TOKEN, squatter, squatter, 1n, 1n], { from: squatter }), /not your namespace/, "no one else can mint the reserved id");
+  }
   await rejects(h.call(atm, "open", openArgs(keccak256(toUtf8Bytes("other"))), { from: A(1) }), /escrow the reserve/, "no escrow, no tender");
 
   // ── Bids: A2 asks 60, A3 asks 40 → A3 wins at the second price, 60 ─────────────
@@ -90,7 +97,7 @@ async function main() {
   h.warp(T1 + 201n);
   const v = (await h.call(atm, "settle", [id2], { from: A(9) })).logs.find((l) => l.name === "JobSettled").args;
   ok(v.price === 0n && v.refund === 30n, "void: full refund credited");
-  ok((await h.call(task, "updateAuthorityOf", [BigInt(HASH2)])).out[0] === "0x" + "0".repeat(40), "void: no token minted");
+  ok((await h.call(task, "updateAuthorityOf", [TOKEN + 1n])).out[0] === "0x" + "0".repeat(40), "void: no token minted");
 
   // ── The adapter only answers the task contract itself ─────────────────────────
   const direct = await h.call(atm, "verifyFulfillment", [task.address, TOKEN, win, A(3), resultFor(A(3)), ANSWER], { from: A(9) });
