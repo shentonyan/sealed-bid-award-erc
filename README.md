@@ -77,15 +77,16 @@ fixed reward breaks it ([post #5](https://ethereum-magicians.org/t/sealed-bid-aw
 chugarchugarr proposed separating price-binding from allocation-only integrations
 ([post #7](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/7)). It holds only if the target
 
-- **(a)** pays the winner `Award.price`, and
-- **(b)** executes every non-empty award, with no discretion conditioned on the revealed bids.
+- **(a) is payment-binding:** it pays the winner `Award.price`, and
+- **(b) is execution-binding:** once the award is final, anyone can trigger its execution, and
+  no one, the requester included, can withhold it, pre-empt it or make it revert.
 
 If the target pays a fixed reward instead, ranking by bid is not incentive compatible: with
 reward 100, cost 60 and a rival bid of 50, bidding 40 wins and bidding the truth loses. The
 only rule that stays incentive compatible under a fixed payment is a posted price, so
 allocation-only tenders must use `award.posted-price`. If the requester can decline after
 seeing the bids, (b) fails, which is why the price-binding ERC-8414 route below mints only
-after the award and lets anyone trigger it.
+after the award, in one transition anyone can trigger, at a token id no one else can take.
 
 The full numbers, including the value of the reserve and the effect of phantom commitments,
 are in [`analysis/`](analysis/). The dominance property is proved for all inputs in
@@ -148,8 +149,10 @@ revealed in, and a stable sort is what makes "ties go to the earlier commit" hol
 **Two ERC-8414 adapters**, one per integration profile:
 
 - [`AwardThenMint`](src/adapters/AwardThenMint.sol) is **price-binding**. The requester
-  escrows the reserve when opening the tender. Once it is awarded, anyone can call `settle`,
-  which mints the task token with `rewardPerCompletion = Award.price`, funds it from the
+  escrows the reserve when opening the tender, and the token id is reserved in the
+  adapter's own minter namespace so nobody can mint it first. Once the tender's reveal window
+  has closed, anyone can call `settle`, which in one transition finalizes the tender if
+  needed, mints the task token with `rewardPerCompletion = Award.price`, funds it from the
   escrow and credits the rest back to the requester. The token's acceptance authority pays
   only the winner, and only for work an inner verifier accepts. This is the route on which
   truthful bidding under `award.vickrey` actually holds.
@@ -160,7 +163,7 @@ revealed in, and a stable sort is what makes "ties go to the earlier commit" hol
 
 ## Acknowledgements
 
-The integration profiles, `award.posted-price` and `AwardThenMint` came out of review on the
+The integration profiles, `award.posted-price`, `AwardThenMint` and the finality rule came out of review on the
 [Ethereum Magicians thread](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814):
 
 - **SergeevDmitry** ([post #5](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/5)) gave the counterexample showing that ranking by bid
@@ -168,7 +171,16 @@ The integration profiles, `award.posted-price` and `AwardThenMint` came out of r
   [`proofs/IntegrationProfiles.lean`](proofs/IntegrationProfiles.lean).
 - **chugarchugarr** ([post #7](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/7)) proposed the split into price-binding and
   allocation-only integrations, put it as IC(award) ≠ IC(target ∘ award), and suggested
-  awarding before an ERC-8414 token is minted.
+  awarding before an ERC-8414 token is minted. In [post #10](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/10) they named the two
+  conditions payment-binding and execution-binding, pointed out that escrow is one way to
+  meet execution-binding rather than its definition, and asked for one atomic settle
+  transition. Applying that test to `AwardThenMint` exposed a real gap: the token id it
+  would mint was not reserved, so anyone could mint it first and block settlement forever.
+  The id is now reserved at open, and the squatting case is a test.
+- **predge-ai** ([post #11](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/11)) asked what happens if an award changes after a target
+  has read it. The award here cannot change, since it is computed only from on-chain data,
+  but the spec did not say so. It now makes `Awarded` and `Void` terminal, and the tests
+  check that nothing reachable afterwards changes the award.
 
 Any errors in how these ideas were carried into the spec and code are the author's.
 

@@ -117,6 +117,14 @@ async function main() {
   const stored = (await h.call(tender, "awardOf", [tenderId])).out[0];
   ok(stored.length === 1 && stored[0][0].toLowerCase() === A(3) && stored[0][1] === 60n, "awardOf stored");
   await rejects(h.call(tender, "finalize", [tenderId]), /already finalized/, "double finalize");
+  // Awarded is terminal: nothing reachable afterwards changes the phase or the award.
+  await rejects(h.call(tender, "commitBid", [tenderId, commitment(tenderId, A(9), 1n, salt(9))], { from: A(9), value: BOND }), /./, "no commit after award");
+  await rejects(h.call(tender, "revealBid", [tenderId, 70n, salt(4)], { from: A(4) }), /./, "no reveal after award");
+  h.warp(h.now() + 365n * 86400n);
+  await rejects(h.call(tender, "finalize", [tenderId]), /already finalized/, "no re-finalize a year later");
+  ok((await h.call(tender, "phaseOf", [tenderId])).out[0] === 3n, "still Awarded a year later");
+  const later = (await h.call(tender, "awardOf", [tenderId])).out[0];
+  ok(JSON.stringify(later, (k, v) => typeof v === "bigint" ? v.toString() : v) === JSON.stringify(stored, (k, v) => typeof v === "bigint" ? v.toString() : v), "awardOf unchanged");
 
   // ── Void path: nobody under reserve ─────────────────────────────────────────
   const t2 = terms({ commitDeadline: h.now() + 100n, revealDeadline: h.now() + 200n, reserve: 50n });
@@ -130,6 +138,7 @@ async function main() {
   ok(fin2.logs.some((l) => l.name === "TenderVoid"), "void event");
   ok((await h.call(tender, "phaseOf", [id2])).out[0] === 4n, "phase Void");
   ok((await h.call(tender, "awardOf", [id2])).out[0].length === 0, "awardOf empty when void");
+  await rejects(h.call(tender, "finalize", [id2]), /already finalized/, "Void is terminal");
 
   // ── Void path: nobody revealed at all (finalize from Commit phase) ──────────
   const t3 = terms({ commitDeadline: h.now() + 100n, revealDeadline: h.now() + 200n });
