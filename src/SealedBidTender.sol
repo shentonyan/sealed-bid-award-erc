@@ -40,6 +40,7 @@ contract SealedBidTender is ISealedBidTender {
         uint256 revealCount;
         IAwardMechanism.Award[] awards;
         uint256 slashed; // credited at finalize, paid by claimSlashed
+        bytes32 mechanismCodehash; // pinned at open, re-checked at finalize
     }
 
     /// @notice Upper bound on `maxBidders`. At 256 revealed bids `finalize` costs about 8M gas.
@@ -106,6 +107,7 @@ contract SealedBidTender is ISealedBidTender {
         t.terms = terms;
         t.requester = msg.sender;
         t.phase = Phase.Commit;
+        t.mechanismCodehash = terms.mechanism.codehash;
 
         emit TenderOpened(
             tenderId,
@@ -116,7 +118,8 @@ contract SealedBidTender is ISealedBidTender {
             terms.units,
             terms.commitDeadline,
             terms.revealDeadline,
-            terms.integrationProfile
+            terms.integrationProfile,
+            t.mechanismCodehash
         );
     }
 
@@ -167,8 +170,9 @@ contract SealedBidTender is ISealedBidTender {
 
         // Bids reach the mechanism in commit order, not reveal order: the tie rule (and the
         // posted-price rule) must not depend on who managed to reveal first.
+        require(t.terms.mechanism.codehash == t.mechanismCodehash, "mechanism code changed");
         result = IAwardMechanism(t.terms.mechanism).award(_bidsInCommitOrder(t), t.terms.reserve, t.terms.units);
-        _checkAward(result, t.terms);
+        _checkAward(result, t);
 
         if (result.length == 0) {
             t.phase = Phase.Void;
@@ -223,6 +227,10 @@ contract SealedBidTender is ISealedBidTender {
         return t.awards;
     }
 
+    function mechanismCodehashOf(bytes32 tenderId) external view exists(tenderId) returns (bytes32) {
+        return _tenders[tenderId].mechanismCodehash;
+    }
+
     function slashedOf(bytes32 tenderId) external view exists(tenderId) returns (uint256) {
         return _tenders[tenderId].slashed;
     }
@@ -247,11 +255,20 @@ contract SealedBidTender is ISealedBidTender {
     /// @dev Defensive re-check of the mechanism's output against the conditions the
     ///      ERC places on `award`. A mechanism that violates them cannot be trusted,
     ///      and a bad award must not reach the escrow.
-    function _checkAward(IAwardMechanism.Award[] memory a, TenderTerms storage terms) private view {
+    ///      Every check here is independent of the pricing rule: each winner must be a bidder
+    ///      who revealed, with a bid within the reserve, paid at least its own bid and at most
+    ///      the reserve. (The first two were missing until Revinand pointed it out on the
+    ///      Ethereum Magicians thread, post #15.)
+    function _checkAward(IAwardMechanism.Award[] memory a, Tender storage t) private view {
+        TenderTerms storage terms = t.terms;
         require(a.length <= terms.units, "too many awards");
         for (uint256 i = 0; i < a.length; i++) {
             require(a[i].price <= terms.reserve, "price above reserve");
             require(a[i].winner != address(0), "zero winner");
+            Commitment storage c = t.commitments[a[i].winner];
+            require(c.revealed, "winner did not reveal");
+            require(c.amount <= terms.reserve, "winner bid above reserve");
+            require(a[i].price >= c.amount, "price below winner's bid");
             for (uint256 j = 0; j < i; j++) {
                 require(a[j].winner != a[i].winner, "duplicate winner");
             }

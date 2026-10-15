@@ -50,7 +50,8 @@ interface ISealedBidTender {
         uint256 units,
         uint64 commitDeadline,
         uint64 revealDeadline,
-        bytes4 integrationProfile
+        bytes4 integrationProfile,
+        bytes32 mechanismCodehash
     );
     event BidCommitted(bytes32 indexed tenderId, address indexed bidder, bytes32 commitment);
     event BidRevealed(bytes32 indexed tenderId, address indexed bidder, uint256 amount);
@@ -72,4 +73,6 @@ interface ISealedBidTender {
     function phaseOf(bytes32 tenderId) external view returns (Phase);
     function awardOf(bytes32 tenderId) external view returns (IAwardMechanism.Award[] memory);
     function slashedOf(bytes32 tenderId) external view returns (uint256);
+    /// @notice The mechanism's code hash, recorded at openTender. finalize reverts if it differs.
+    function mechanismCodehashOf(bytes32 tenderId) external view returns (bytes32);
 }
