@@ -81,11 +81,14 @@ interface IAwardMechanism {
 `award` MUST satisfy all of the following:
 
 1. It MUST be deterministic and MUST NOT read state.
-2. No returned `winner` MAY have bid an `amount` greater than `reserve`.
+2. Each returned `winner` MUST be the `bidder` of an entry in `bids`, and that entry's `amount` MUST NOT exceed `reserve`.
 3. No returned `price` MAY exceed `reserve`.
 4. Each returned `winner` MUST appear at most once, and the number of awards MUST NOT exceed `units`.
 5. Lowering one bidder's `amount` while holding all other inputs fixed MUST NOT remove that bidder from the award. This is the monotonicity condition that incentive compatibility requires.
 6. Ties on `amount` MUST be broken in favour of the bid that appears earlier in `bids`.
+7. No returned `price` MAY be less than the winner's own `amount`.
+
+The output of `award` MUST depend only on its arguments and MUST NOT change over the life of the mechanism contract. In particular a mechanism MUST NOT be upgradeable and MUST NOT delegate the computation to code that can be replaced.
 
 ### Normative mechanisms
 
@@ -140,7 +143,8 @@ interface ISealedBidTender {
         uint256 units,
         uint64 commitDeadline,
         uint64 revealDeadline,
-        bytes4 integrationProfile
+        bytes4 integrationProfile,
+        bytes32 mechanismCodehash
     );
     event BidCommitted(bytes32 indexed tenderId, address indexed bidder, bytes32 commitment);
     event BidRevealed(bytes32 indexed tenderId, address indexed bidder, uint256 amount);
@@ -160,6 +164,7 @@ interface ISealedBidTender {
     function phaseOf(bytes32 tenderId) external view returns (Phase);
     function awardOf(bytes32 tenderId) external view returns (IAwardMechanism.Award[] memory);
     function slashedOf(bytes32 tenderId) external view returns (uint256);
+    function mechanismCodehashOf(bytes32 tenderId) external view returns (bytes32);
 }
 ```
 
@@ -171,9 +176,11 @@ interface ISealedBidTender {
 
 **Revealing.** `revealBid` MUST revert unless `commitDeadline < block.timestamp <= revealDeadline`, the caller has an unrevealed commitment for this tender, and `keccak256(abi.encode(tenderId, msg.sender, amount, salt))` equals that commitment. On success the contract MUST record the bid, MUST emit `BidRevealed`, and MUST return the caller's bond. The phase becomes `Reveal` on the first valid reveal or, if none arrives, remains `Commit` until finalization.
 
-**Finalizing.** `finalize` is permissionless and MUST revert unless `block.timestamp > revealDeadline` and the phase is `Commit` or `Reveal`. The contract MUST call `mechanism.award(bids, reserve, units)` with the revealed bids in commit order, and MUST then check the result against conditions 2 to 4 of the award mechanism interface (no price above `reserve`, no duplicate winner, no more awards than `units`), reverting if any fails. The mechanism is a third-party contract and the tender contract is the last check before an award reaches a target. If the result is non-empty the contract MUST store it, set the phase to `Awarded`, and emit one `TenderAwarded` per winner. If the result is empty the contract MUST set the phase to `Void` and emit `TenderVoid`. `Awarded` and `Void` are terminal: once either is set, the phase and the stored award MUST NOT change. In either case the contract MUST slash the bond of every committed bidder who did not reveal, emitting `BidSlashed` for each, and MUST credit the total slashed amount to the tender. `finalize` MUST NOT transfer slashed bonds itself, so that a `slashRecipient` that rejects payment cannot prevent an award.
+**Finalizing.** `finalize` is permissionless and MUST revert unless `block.timestamp > revealDeadline` and the phase is `Commit` or `Reveal`. The contract MUST revert if the mechanism's code hash differs from the one recorded at opening. It MUST call `mechanism.award(bids, reserve, units)` with the revealed bids in commit order, and MUST then check the result against the revealed bids, reverting unless every award satisfies all of the following: the winner revealed a bid in this tender; that bid is at most `reserve`; the price is at least that bid and at most `reserve`; no winner appears twice; and there are no more awards than `units`. These are conditions 2, 3, 4 and 7 of the award mechanism interface. None of them depends on the pricing rule. The mechanism is a third-party contract and the tender contract is the last check before an award reaches a target. If the result is non-empty the contract MUST store it, set the phase to `Awarded`, and emit one `TenderAwarded` per winner. If the result is empty the contract MUST set the phase to `Void` and emit `TenderVoid`. `Awarded` and `Void` are terminal: once either is set, the phase and the stored award MUST NOT change. In either case the contract MUST slash the bond of every committed bidder who did not reveal, emitting `BidSlashed` for each, and MUST credit the total slashed amount to the tender. `finalize` MUST NOT transfer slashed bonds itself, so that a `slashRecipient` that rejects payment cannot prevent an award.
 
 **Claiming slashed bonds.** `claimSlashed` is permissionless. It MUST revert if nothing is credited, and otherwise MUST set the credit to zero, transfer it to `slashRecipient`, and emit `SlashClaimed`. `slashedOf` MUST return the current credit. `slashRecipient` MUST NOT be an address from which the requester can recover funds, directly or through the target. In particular it MUST NOT be the target's escrow or vault where, as under [ERC-8414](./eip-8414.md), funds sent there offset the requester's own contribution or return to the target's owner. The RECOMMENDED `slashRecipient` is a burn address.
+
+**Pinning the mechanism.** `openTender` MUST record the mechanism's code hash (`EXTCODEHASH`) and emit it in `TenderOpened`, and `mechanismCodehashOf` MUST return it.
 
 **Views.** All view functions MUST revert for a `tenderId` that does not exist. `awardOf` MUST return an empty array unless the phase is `Awarded`, and once the phase is `Awarded` MUST return the same result on every call.
 
@@ -215,7 +222,7 @@ This ERC does not specify adapters. The following patterns are consistent with t
 
 **Reserve is a field of its own.** The optimal reserve is strictly tighter than the requester's outside value, and the mechanism must be allowed to return no award. Folding reserve into a budget field hides that decision.
 
-**Uniform-price is limited to one unit per bidder.** With several units and bidders who want more than one, uniform-price invites demand reduction and is not truthful. Deployments that need multi-unit demand should use a Vickrey-Clarke-Groves rule as a plugin.
+**Uniform-price is limited to one unit per bidder, and a bidder is an address.** With several units and bidders who want more than one, uniform-price invites demand reduction and is not truthful. Deployments that need multi-unit demand should use a Vickrey-Clarke-Groves rule as a plugin. The tender cannot tell operators apart, only addresses, so the one-unit limit holds only if each operator bids from one address. An operator with two addresses can win one unit and use the other address to set the clearing price, which is demand reduction by another route; it can also decide which to do after seeing earlier reveals. `award.uniform-price` is therefore truthful only where an admission layer binds each operator to one address. Single-unit `award.vickrey` does not have this weakness: a second identity only adds another bid, which can lower the lowest other bid but never raise it, so it can never raise the price paid. This point was raised by zexoverz in the discussion thread; the general problem is known as false-name bidding.[^2]
 
 **Asymmetric and correlated-type mechanisms are out of scope.** Rules that discriminate between bidders need per-bidder beliefs about cost distributions. Full-surplus extraction under correlated types needs the requester to pay losing bidders, which the escrow standards forbid. Both remain expressible as plugins; neither is normative.
 
@@ -245,7 +252,7 @@ This ERC introduces new interfaces and does not change any existing one. Contrac
 
 Test vectors are provided in `../assets/erc-draft_sealed_bid_award/vectors/award-vectors.json`. Each vector supplies a list of bids in commit order, a reserve, a unit count, and the expected award for each normative mechanism. The set covers: all bids under the reserve; a single bid, which pays the reserve under `award.vickrey` and `award.uniform-price`; no bid under the reserve; a second-lowest bid above the reserve, which caps the Vickrey price at the reserve; ties, which go to the earlier commit; an empty bid list; and multi-unit cases where the clearing price is the first excluded bid or, when there is none, the reserve.
 
-The following must hold for every vector and for any further input an implementation is tested on, since they restate conditions 1 to 6 of the specification: the same input gives the same output; no winner bid above the reserve; no price exceeds the reserve; no winner appears twice and there are no more awards than units; lowering a winner's bid keeps it a winner; and equal bids resolve to the earlier commit. For `award.vickrey`, in addition, a bidder's payoff from bidding its true cost is never less than its payoff from any other bid, holding other bids fixed. For `award.posted-price`, accepting exactly when cost is at most the reserve is never worse than any other bid, at any commit position. The vectors also cover the posted-price rule: the earliest acceptances win at the reserve, and a lower bid does not overtake an earlier acceptance.
+The following must hold for every vector and for any further input an implementation is tested on, since they restate conditions 1 to 7 of the specification: the same input gives the same output; every winner is a bidder whose bid is within the reserve; no price exceeds the reserve; no winner appears twice and there are no more awards than units; lowering a winner's bid keeps it a winner; equal bids resolve to the earlier commit; and no winner is paid less than its bid. For `award.vickrey`, in addition, a bidder's payoff from bidding its true cost is never less than its payoff from any other bid, holding other bids fixed. For `award.posted-price`, accepting exactly when cost is at most the reserve is never worse than any other bid, at any commit position. The vectors also cover the posted-price rule: the earliest acceptances win at the reserve, and a lower bid does not overtake an earlier acceptance.
 
 ## Reference Implementation
 
@@ -266,6 +273,10 @@ A reference `SealedBidTender` contract and the four normative mechanism contract
 **Discretionary execution.** A consumer that declares price-binding but can decline an award after the reveals breaks the incentive properties the profile promises, and the bidders cannot detect it from the tender alone. Bidders should verify that a price-binding tender's requester is a contract that executes awards without discretion, such as an escrowing adapter, before relying on truthful bidding.
 
 **Pre-empting execution.** An execution-binding adapter depends on every step of its settle transition succeeding. If the target lets anyone create the object the adapter will create, such as an ERC-8414 token with a chosen identifier, an attacker can create it first and make settlement revert permanently, locking the escrow. Adapters should reserve every such identifier when the tender opens, and bidders should check that reservation before relying on the price-binding profile.
+
+**A faulty or replaced mechanism.** The mechanism is third-party code. The tender checks every award against the revealed bids, so a faulty mechanism cannot name a bidder who never revealed, award a bid above the reserve, or pay a winner less than it asked, but it can still choose the wrong winner among valid bids or the wrong price within those bounds. Bidders therefore rely on the mechanism's code. Pinning the code hash at opening stops the code at that address from being replaced before `finalize`, but a code hash does not reveal a proxy, whose behaviour changes with its implementation behind an unchanged hash. Bidders should check that the code at the pinned hash computes the result itself, for example by comparing it with a known reference deployment, rather than relying on `mechanismId`, which any contract can return. The need to state and enforce these checks was raised by Revinand in the discussion thread.
+
+**False-name bids.** Under `award.uniform-price`, one operator bidding from several addresses can win fewer units than it could serve in order to raise the clearing price, as explained in the Rationale. Deployments that use `award.uniform-price` with `units > 1` should admit bidders through a layer that binds operators to addresses, or accept that the rule is not truthful for operators with several addresses.
 
 **Bidder cap.** `finalize` sorts the revealed bids and visits every commitment, so its cost grows faster than linearly in the number of bidders: in the reference implementation it is about 2M gas at 128 revealed bids, 8M at 256, 31M at 512 and 122M at 1,024. A bond does not prevent flooding, since a bidder who reveals recovers it, so without a cap anyone could make a tender impossible to finalize for the cost of gas. Hence the `maxBidders` term and the implementation limit. The reference implementation's limit is 256.
 
@@ -306,6 +317,40 @@ A reference `SealedBidTender` contract and the four normative mechanism contract
         ]
       },
       "URL": "https://doi.org/10.1287/moor.6.1.58"
+    }
+    ```
+
+[^2]:
+    ```csl-json
+    {
+      "type": "article-journal",
+      "id": 2,
+      "author": [
+        {
+          "family": "Yokoo",
+          "given": "Makoto"
+        },
+        {
+          "family": "Sakurai",
+          "given": "Yuko"
+        },
+        {
+          "family": "Matsubara",
+          "given": "Shigeo"
+        }
+      ],
+      "DOI": "10.1016/S0899-8256(03)00045-9",
+      "title": "The effect of false-name bids in combinatorial auctions: new fraud in internet auctions",
+      "container-title": "Games and Economic Behavior",
+      "volume": "46",
+      "issue": "1",
+      "page": "174-188",
+      "original-date": {
+        "date-parts": [
+          [2004, 1, 1]
+        ]
+      },
+      "URL": "https://doi.org/10.1016/S0899-8256(03)00045-9"
     }
     ```
 

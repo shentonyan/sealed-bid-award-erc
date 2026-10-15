@@ -242,6 +242,40 @@ async function main() {
       "fixed reward with bid ranking rewards underbidding (counterexample)");
   }
 
+  // ── False-name bids (zexoverz, Ethereum Magicians post #16) ──────────────────
+  // One operator controls two addresses, each able to do one unit at cost c. Rivals R1, R2
+  // bid truthfully. Uniform-price's truthfulness is per address, so with two addresses the
+  // operator can gain by withholding one unit (demand reduction). Single-unit Vickrey is
+  // immune: a second identity only adds another bid, which can never raise the lowest
+  // other bid, so it can never raise the price the operator is paid.
+  {
+    const fg = [10n, 30n, 50n, 70n, 95n, 110n];
+    const op1 = A(11), op2 = A(12);
+    const opUtil = (out, c) =>
+      out.filter((x) => x.winner === op1.toLowerCase() || x.winner === op2.toLowerCase())
+        .reduce((s, x) => s + x.price - c, 0n);
+    let uniformGain = null, vchecks = 0;
+    for (const c of [10n, 30n]) {
+      for (const r1 of fg) for (const r2 of fg) {
+        const rivals = [[A(21), r1], [A(22), r2]];
+        // Uniform-price, two units: truthful is both addresses at cost.
+        const uTrue = opUtil(await award("award.uniform-price", [[op1, c], [op2, c], ...rivals], R, 2n), c);
+        // Vickrey, one unit: truthful is one identity at cost.
+        const vTrue = opUtil(await award("award.vickrey", [[op1, c], ...rivals]), c);
+        for (const b1 of fg) for (const b2 of fg) {
+          const uDev = opUtil(await award("award.uniform-price", [[op1, b1], [op2, b2], ...rivals], R, 2n), c);
+          if (uDev > uTrue && !uniformGain) uniformGain = { c, r1, r2, b1, b2, uTrue, uDev };
+          const vDev = opUtil(await award("award.vickrey", [[op1, b1], [op2, b2], ...rivals]), c);
+          assert(vDev <= vTrue, `vickrey gained from a false name: c=${c} rivals=${r1},${r2} bids=${b1},${b2}`);
+          vchecks++;
+        }
+      }
+    }
+    ok(uniformGain !== null, "uniform-price: an operator with two addresses can gain by withholding a unit");
+    console.log(`false-name: uniform-price gain found ${JSON.stringify(uniformGain, (k, v) => typeof v === "bigint" ? Number(v) : v)}; vickrey checks: ${vchecks}`);
+    passed++;
+  }
+
   console.log(`mechanisms: ${passed} assertions passed`);
 }
 

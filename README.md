@@ -42,7 +42,7 @@ the task.
 1. **A sealed-bid procedure.** Commit, reveal, finalize. A bond is returned on reveal and
    slashed if a commitment is never opened.
 2. **A stateless mechanism interface.** `award(bids, reserve, units) → [(winner, price)]`,
-   with six conditions every rule must satisfy, including monotonicity and a fixed tie rule.
+   with seven conditions every rule must satisfy, including monotonicity and a fixed tie rule.
 3. **Four normative pricing rules.** `award.first-price`, `award.vickrey` (recommended),
    `award.uniform-price` and `award.posted-price`, each a swappable pure contract.
 4. **Two integration profiles.** Each tender declares, before anyone commits, what its award
@@ -99,8 +99,8 @@ Every push runs all three in [CI](.github/workflows/ci.yml).
 
 | Check | What it covers |
 | --- | --- |
-| `npm test` | Golden vectors for all four rules; the six `award` conditions over an exhaustive 3-bidder grid; Vickrey dominance and posted-price acceptance dominance by brute force; the fixed-reward counterexample; the full tender lifecycle, including integration-profile checks; both ERC-8414 adapters end to end |
-| `forge test` | The same lifecycle in Foundry, fuzzed monotonicity and truthfulness, and regression tests for the bidder cap, rejecting slash recipients, USDT-style bond tokens and commit-order tie-breaking |
+| `npm test` | Golden vectors for all four rules; the seven `award` conditions over an exhaustive 3-bidder grid; Vickrey dominance and posted-price acceptance dominance by brute force; the fixed-reward counterexample; false-name bids (uniform-price is exploitable with two addresses, single-unit Vickrey is not); the full tender lifecycle, including integration-profile checks; both ERC-8414 adapters end to end |
+| `forge test` | The same lifecycle in Foundry, fuzzed monotonicity and truthfulness, and regression tests for the bidder cap, rejecting slash recipients, USDT-style bond tokens and commit-order tie-breaking; faulty mechanisms (a winner who never revealed, a winner above the reserve, a price below the winner's bid) and a mechanism whose code is swapped after opening |
 | `lean proofs/VickreyTruthful.lean` | Truthful bidding is weakly dominant under `award.vickrey`, for any reserve, any number of bidders in any commit order, and any deviation; no `sorry`, standard axioms only |
 | `lean proofs/IntegrationProfiles.lean` | With a fixed reward, ranking by bid is not truthful (the counterexample above); under `award.posted-price`, accepting exactly when cost ≤ reserve is weakly dominant |
 
@@ -131,8 +131,9 @@ The same commands work in Windows PowerShell; run them one per line.
 ## Design notes
 
 **`SealedBidTender`** holds bidder bonds only. It never holds the task reward, judges a
-deliverable, writes reputation, or acts on the target. On `finalize` it calls the tender's
-mechanism, re-checks the result against the ERC's conditions, stores the award, and credits
+deliverable, writes reputation, or acts on the target. It pins the mechanism's code hash at opening. On `finalize` it calls the
+mechanism, checks every award against the revealed bids (the winner revealed, its bid is
+within the reserve, it is paid at least its bid and at most the reserve), stores the award, and credits
 unopened bonds for slashing. Three properties keep it robust:
 
 - **Bounded bidders.** Each tender sets `maxBidders`, capped at 256. `finalize` sorts bids,
@@ -163,7 +164,8 @@ revealed in, and a stable sort is what makes "ties go to the earlier commit" hol
 
 ## Acknowledgements
 
-The integration profiles, `award.posted-price`, `AwardThenMint` and the finality rule came out of review on the
+The integration profiles, `award.posted-price`, `AwardThenMint`, the finality rule, the
+award checks and the false-name caveat came out of review on the
 [Ethereum Magicians thread](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814):
 
 - **SergeevDmitry** ([post #5](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/5)) gave the counterexample showing that ranking by bid
@@ -181,6 +183,16 @@ The integration profiles, `award.posted-price`, `AwardThenMint` and the finality
   has read it. The award here cannot change, since it is computed only from on-chain data,
   but the spec did not say so. It now makes `Awarded` and `Void` terminal, and the tests
   check that nothing reachable afterwards changes the award.
+
+- **Revinand** ([post #15](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/15)) found that `finalize` did not check that each winner
+  had revealed a bid within the reserve, so a faulty mechanism could award a bidder who never
+  revealed. The tender now checks every award against the revealed bids and pins the
+  mechanism's code hash at opening, and the spec states that mechanisms must not be
+  upgradeable and how bidders should check them.
+- **zexoverz** ([post #16](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/16)) showed that uniform-price's one-unit-per-bidder limit is
+  really one unit per address, so an operator with two addresses can reduce demand. The
+  Rationale and Security Considerations now say so, and a brute-force test finds the gain under
+  uniform-price and confirms that single-unit Vickrey is immune.
 
 Any errors in how these ideas were carried into the spec and code are the author's.
 
