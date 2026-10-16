@@ -28,10 +28,10 @@ async function main() {
   const terms = (over = {}) => ({
     targetRef: TARGET, mechanism: vickrey.address, reserve: 100n, units: 1n,
     commitDeadline: T0 + 100n, revealDeadline: T0 + 200n, bond: BOND, bondAsset: "0x" + "0".repeat(40),
-    slashRecipient: SINK, maxBidders: 16n, integrationProfile: PRICE_BINDING,
+    slashRecipient: SINK, maxBidders: 16n, integrationProfile: PRICE_BINDING, contentHash: "0x" + "ab".repeat(32),
     ...over,
   });
-  const asTuple = (t) => [t.targetRef, t.mechanism, t.reserve, t.units, t.commitDeadline, t.revealDeadline, t.bond, t.bondAsset, t.slashRecipient, t.maxBidders, t.integrationProfile];
+  const asTuple = (t) => [t.targetRef, t.mechanism, t.reserve, t.units, t.commitDeadline, t.revealDeadline, t.bond, t.bondAsset, t.slashRecipient, t.maxBidders, t.integrationProfile, t.contentHash];
 
   // ── openTender validation ───────────────────────────────────────────────────
   await rejects(h.call(tender, "openTender", [asTuple(terms({ reserve: 0n }))]), /reserve/, "reserve 0");

@@ -21,6 +21,13 @@ interface ITaskTokenAuthority {
     function updateAuthorityOf(uint256 tokenId) external view returns (address);
 }
 
+/// @dev ERC-8414 lets the update authority change a task after minting, and does not name a
+///      content hash. This adapter assumes the task contract exposes one; a deployment would
+///      map it to whatever the task contract commits to (for example a hash of the task URI).
+interface ITaskContent {
+    function taskHashOf(uint256 tokenId) external view returns (bytes32);
+}
+
 interface ITaskTenderTerms {
     struct TenderTerms {
         address asset;
@@ -59,7 +66,13 @@ interface ITaskTenderTerms {
 ///        - the tender MUST be allocation-only and use award.posted-price;
 ///        - the tender's reserve MUST equal the task's `rewardPerCompletion`, so the posted
 ///          price is the reward;
-///        - the tender's `units` MUST NOT exceed `maxCompletions` when that is bounded.
+///        - the tender's `units` MUST NOT exceed `maxCompletions` when that is bounded;
+///        - the tender's `contentHash` MUST be non-zero and equal the task's current content
+///          hash, so the bids price the task as it stands.
+///      After binding, a submission settles only while the task's content hash still equals
+///      the tender's. If the update authority changes the task after the bids are in, the
+///      award stops making anyone eligible: it priced different work (Ted, ERC-8414 thread,
+///      post #28).
 ///
 ///      A `false` return is not a rejection under ERC-8414: the submission stays pending and
 ///      may be settled later. So a submission made before the award is final simply waits.
@@ -68,6 +81,7 @@ contract AwardGatedVerifier is ITaskVerifier {
         address tender;
         bytes32 tenderId;
         address inner;
+        bytes32 contentHash;
     }
 
     /// taskContract => tokenId => binding
@@ -113,8 +127,13 @@ contract AwardGatedVerifier is ITaskVerifier {
         ITaskTenderTerms.TenderTerms memory task = ITaskTenderTerms(taskContract).tenderTermsOf(tokenId);
         require(terms.reserve == task.rewardPerCompletion, "reserve must equal reward");
         require(task.maxCompletions == 0 || terms.units <= task.maxCompletions, "more units than completions");
+        require(
+            terms.contentHash != bytes32(0) && terms.contentHash == ITaskContent(taskContract).taskHashOf(tokenId),
+            "tender priced other content"
+        );
 
-        bindingOf[taskContract][tokenId] = Binding({tender: tender, tenderId: tenderId, inner: inner});
+        bindingOf[taskContract][tokenId] =
+            Binding({tender: tender, tenderId: tenderId, inner: inner, contentHash: terms.contentHash});
         emit Bound(taskContract, tokenId, tender, tenderId, inner);
     }
 
@@ -143,6 +162,7 @@ contract AwardGatedVerifier is ITaskVerifier {
         if (taskContract != msg.sender) return false;
         if (!isWinner(taskContract, tokenId, fulfiller)) return false;
         Binding memory b = bindingOf[taskContract][tokenId];
+        if (ITaskContent(taskContract).taskHashOf(tokenId) != b.contentHash) return false; // task changed
         return ITaskVerifier(b.inner).verifyFulfillment(taskContract, tokenId, submissionId, fulfiller, resultHash, proof);
     }
 }

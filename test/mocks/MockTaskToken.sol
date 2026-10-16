@@ -37,6 +37,8 @@ contract MockTaskToken {
     mapping(uint256 => TenderTerms) private _terms;
     mapping(uint256 => uint256) public escrowBalanceOf;
     mapping(uint256 => uint64) public completionsOf;
+    /// Stand-in for the task content an update authority can change after minting.
+    mapping(uint256 => bytes32) public taskHashOf;
     mapping(uint256 => Submission[]) private _subs;
 
     event FulfillmentSubmitted(uint256 indexed tokenId, uint256 indexed submissionId, address indexed fulfiller, bytes32 resultHash);
@@ -53,6 +55,11 @@ contract MockTaskToken {
         acceptanceAuthorityOf[tokenId] = acceptanceAuthority;
         _terms[tokenId] = TenderTerms(address(0), reward, maxCompletions, 0, 0, 0, 0, 1 days);
         escrowBalanceOf[tokenId] = msg.value;
+    }
+
+    function updateTask(uint256 tokenId, bytes32 taskHash) external {
+        require(msg.sender == updateAuthorityOf[tokenId], "only update authority");
+        taskHashOf[tokenId] = taskHash;
     }
 
     function tenderTermsOf(uint256 tokenId) external view returns (TenderTerms memory) {

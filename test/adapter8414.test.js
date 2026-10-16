@@ -35,6 +35,9 @@ async function main() {
 
   // Requester A1 mints the task: reward 100, one completion, adapter in the judgment slot.
   await h.call(task, "mint", [TOKEN, A(1), adapter.address, REWARD, 1n], { from: A(1), value: REWARD });
+  const H1 = keccak256(toUtf8Bytes("task spec v1"));
+  const H2 = keccak256(toUtf8Bytes("task spec v2"));
+  await h.call(task, "updateTask", [TOKEN, H1], { from: A(1) });
   const targetRef = (await h.call(adapter, "targetRefFor", [task.address, TOKEN])).out[0];
   ok(targetRef === keccak256(coder.encode(["uint256", "address", "bytes32"], [1n, task.address, "0x" + TOKEN.toString(16).padStart(64, "0")])), "targetRef = keccak(chainid, task, bytes32(tokenId))");
 
@@ -42,8 +45,8 @@ async function main() {
   const terms = (over = {}) => {
     const t = { targetRef, mechanism: posted.address, reserve: REWARD, units: 1n,
       commitDeadline: T0 + 100n, revealDeadline: T0 + 200n, bond: BOND, bondAsset: ZERO, slashRecipient: SINK, maxBidders: 16n,
-      integrationProfile: ALLOCATION_ONLY, ...over };
-    return [t.targetRef, t.mechanism, t.reserve, t.units, t.commitDeadline, t.revealDeadline, t.bond, t.bondAsset, t.slashRecipient, t.maxBidders, t.integrationProfile];
+      integrationProfile: ALLOCATION_ONLY, contentHash: H1, ...over };
+    return [t.targetRef, t.mechanism, t.reserve, t.units, t.commitDeadline, t.revealDeadline, t.bond, t.bondAsset, t.slashRecipient, t.maxBidders, t.integrationProfile, t.contentHash];
   };
   const open = async (t, from) => (await h.call(tender, "openTender", [t], { from })).logs[0].args.tenderId;
 
@@ -53,6 +56,7 @@ async function main() {
   const rigged = await open(terms(), A(9)); // same target, opened by an outsider
   // A price-binding Vickrey tender for a fixed-reward token: the price would be discarded,
   // so truthful bidding would not hold. Binding must refuse it.
+  const otherContent = await open(terms({ contentHash: H2 }), A(1)); // priced a different spec
   const ranked = await open(terms({ mechanism: vickrey.address, integrationProfile: PRICE_BINDING }), A(1));
 
   // ── Binding rules ─────────────────────────────────────────────────────────────
@@ -61,6 +65,7 @@ async function main() {
   await rejects(h.call(adapter, "bind", [task.address, TOKEN, tender.address, rigged, inner.address], { from: A(1) }), /not opened by task authority/, "tender opened by someone else");
   await rejects(h.call(adapter, "bind", [task.address, TOKEN, tender.address, wrongReserve, inner.address], { from: A(1) }), /reserve must equal reward/, "reserve differs from reward");
   await rejects(h.call(adapter, "bind", [task.address, TOKEN, tender.address, ranked, inner.address], { from: A(1) }), /must be allocation-only/, "fixed reward cannot bind a bid-ranking tender");
+  await rejects(h.call(adapter, "bind", [task.address, TOKEN, tender.address, otherContent, inner.address], { from: A(1) }), /priced other content/, "tender priced a different task version");
   const bound = await h.call(adapter, "bind", [task.address, TOKEN, tender.address, good, inner.address], { from: A(1) });
   ok(bound.logs.some((l) => l.name === "Bound"), "bind succeeds for the authority's own tender");
   await rejects(h.call(adapter, "bind", [task.address, TOKEN, tender.address, good, inner.address], { from: A(1) }), /already bound/, "binding is once only");
@@ -93,6 +98,12 @@ async function main() {
   // Someone else replays the winner's submission's proof against their own submission: resultHash binds the fulfiller.
   const copy = (await h.call(task, "submitFulfillment", [TOKEN, resultFor(A(3))], { from: A(9) })).logs[0].args.submissionId;
   await rejects(h.call(task, "settleFulfillment", [TOKEN, copy, ANSWER]), /proof does not establish/, "copied resultHash by a non-winner");
+
+  // Ted's case (ERC-8414 thread, post #28): the requester changes the task after the award.
+  // The award priced v1, so it no longer makes anyone eligible for v2.
+  await h.call(task, "updateTask", [TOKEN, H2], { from: A(1) });
+  await rejects(h.call(task, "settleFulfillment", [TOKEN, early, ANSWER]), /proof does not establish/, "task changed after award: winner not payable for different work");
+  await h.call(task, "updateTask", [TOKEN, H1], { from: A(1) }); // back to the priced spec
 
   // The early submission, which waited, now settles: anyone may call it.
   const before = await h.balance(A(3));

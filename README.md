@@ -165,8 +165,8 @@ revealed in, and a stable sort is what makes "ties go to the earlier commit" hol
 ## Acknowledgements
 
 The integration profiles, `award.posted-price`, `AwardThenMint`, the finality rule, the
-award checks and the false-name caveat came out of review on the
-[Ethereum Magicians thread](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814):
+award checks, the false-name caveat and content binding came out of review on Ethereum
+Magicians, mostly on the [discussion thread](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814):
 
 - **SergeevDmitry** ([post #5](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/5)) gave the counterexample showing that ranking by bid
   under a fixed reward is not truthful. It is now the theorem `fixed_reward_not_truthful` in
@@ -193,6 +193,12 @@ award checks and the false-name caveat came out of review on the
   really one unit per address, so an operator with two addresses can reduce demand. The
   Rationale and Security Considerations now say so, and a brute-force test finds the gain under
   uniform-price and confirms that single-unit Vickrey is immune.
+
+- **Ted** ([ERC-8414 thread, post #28](https://ethereum-magicians.org/t/erc-8414-token-bound-task-tenders/29597/28)) asked what happens if a task changes after the
+  award. Tenders now commit to the task content in `contentHash` at opening, and an award
+  applies only to that content. `AwardThenMint` keeps the minted token's update authority so
+  the requester cannot change the work after the reveals, and `AwardGatedVerifier` stops
+  admitting the winner if the task changes.
 
 Any errors in how these ideas were carried into the spec and code are the author's.
 

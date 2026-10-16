@@ -61,7 +61,8 @@ contract SealedBidTenderTest is Test {
             bondAsset: address(0),
             slashRecipient: sink,
             maxBidders: 16,
-            integrationProfile: AwardProfiles.PRICE_BINDING
+            integrationProfile: AwardProfiles.PRICE_BINDING,
+            contentHash: keccak256("task")
         });
     }
 

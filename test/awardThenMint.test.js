@@ -42,6 +42,7 @@ async function main() {
   ok((await h.balance(atm.address)) === RESERVE, "reserve escrowed in the adapter");
   const terms = (await h.call(tender, "termsOf", [tenderId])).out[0];
   ok(terms.integrationProfile === PRICE_BINDING, "tender is price-binding");
+  ok(terms.contentHash === TASK_HASH, "tender commits to the task content at opening");
   ok(terms.reserve === RESERVE, "reserve equals the escrow");
   ok(terms.targetRef === keccak256(coder.encode(["uint256", "address", "bytes32"], [1n, task.address, "0x" + TOKEN.toString(16).padStart(64, "0")])), "targetRef is canonical for the token to be minted");
   ok((await h.call(atm, "nextTokenId", [])).out[0] === TOKEN + 1n, "next job gets a fresh id");
@@ -65,7 +66,8 @@ async function main() {
   const settled = await h.call(atm, "settle", [tenderId], { from: A(3) });
   const ev = settled.logs.find((l) => l.name === "JobSettled").args;
   ok(ev.winner.toLowerCase() === A(3) && ev.price === 60n && ev.refund === 40n, "settled: A3 at 60, 40 back to the requester");
-  ok((await h.call(task, "updateAuthorityOf", [TOKEN])).out[0].toLowerCase() === A(1), "token minted, requester is its update authority");
+  ok((await h.call(task, "updateAuthorityOf", [TOKEN])).out[0].toLowerCase() === atm.address.toLowerCase(), "token minted with the adapter as update authority");
+  await rejects(h.call(task, "updateTask", [TOKEN, keccak256(toUtf8Bytes("changed spec"))], { from: A(1) }), /only update authority/, "requester cannot change the task after the award (Ted, 8414 #28)");
   ok((await h.call(task, "acceptanceAuthorityOf", [TOKEN])).out[0].toLowerCase() === atm.address.toLowerCase(), "adapter is the acceptance authority");
   ok((await h.call(task, "tenderTermsOf", [TOKEN])).out[0].rewardPerCompletion === 60n, "rewardPerCompletion = Award.price");
   ok((await h.call(task, "escrowBalanceOf", [TOKEN])).out[0] === 60n, "vault funded with the price");

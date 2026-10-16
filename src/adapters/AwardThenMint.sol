@@ -45,6 +45,12 @@ interface ITaskVerifierGated {
 ///        - the token id is reserved when the tender opens: it lies in this adapter's minter
 ///          namespace, (address(this) << 96) | nonce, so no one else can mint it first and make
 ///          settle revert. An earlier version used uint256(taskHash), which anyone could mint.
+///        - the task content is frozen from opening: the tender's contentHash is the task
+///          hash, and the token is minted with this adapter as its update authority, which
+///          has no function that updates anything, so no one can change the work after the
+///          bids are in. An earlier version made the requester the update authority, which
+///          would have let it change the task after seeing the winner's cost (raised by Ted
+///          on the ERC-8414 thread, post #28).
 ///      The target reference is the canonical one for the id that will be minted,
 ///      keccak256(abi.encode(chainId, taskContract, bytes32(tokenId))). The task hash is recorded
 ///      in the job and in JobOpened as the content the requester committed to.
@@ -127,7 +133,8 @@ contract AwardThenMint is ITaskVerifierGated {
                 bondAsset: address(0),
                 slashRecipient: slashRecipient,
                 maxBidders: maxBidders,
-                integrationProfile: AwardProfiles.PRICE_BINDING
+                integrationProfile: AwardProfiles.PRICE_BINDING,
+                contentHash: taskHash
             })
         );
         jobOf[tenderId] = Job({
@@ -163,7 +170,7 @@ contract AwardThenMint is ITaskVerifierGated {
             price = a[0].price; // the tender guarantees price <= reserve == escrow
             j.winner = a[0].winner;
             ITaskMinter(j.taskContract).mint{value: price}(
-                j.tokenId, j.requester, address(this), price, 1
+                j.tokenId, address(this), address(this), price, 1
             );
         }
         uint256 refund = j.escrow - price;
