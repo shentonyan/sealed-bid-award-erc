@@ -14,7 +14,8 @@
 [Discussion](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814) ·
 [Reference contracts](src/) ·
 [Proof](proofs/) ·
-[Analysis](analysis/)
+[Analysis](analysis/) ·
+[Paper](paper/sealed-bid-award-paper.pdf)
 
 </div>
 
@@ -126,6 +127,7 @@ The same commands work in Windows PowerShell; run them one per line.
 | [`test/`](test/) | Foundry and JS suites, and test-only mocks |
 | [`proofs/`](proofs/) | The Lean proofs and how to check them |
 | [`analysis/`](analysis/) | Scripts, results and charts for the commit–reveal analysis |
+| [`paper/`](paper/) | A working paper on the theory: composition conditions, public-ledger frictions, proofs |
 | [`docs/`](docs/) | The diagram above and the script that draws it |
 
 ## Design notes

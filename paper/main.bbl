@@ -1,0 +1,115 @@
+\begin{thebibliography}{16}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[erc({\natexlab{a}})]{erc8195}
+{ERC-8195}: Task market protocol.
+\newblock Ethereum Magicians discussion,
+  \url{https://ethereum-magicians.org/t/erc-8195-task-market-protocol/27935},
+  {\natexlab{a}}.
+\newblock Draft, accessed October 2026.
+
+\bibitem[erc({\natexlab{b}})]{erc8414}
+{ERC-8414}: Token-bound task tenders.
+\newblock Ethereum Magicians discussion,
+  \url{https://ethereum-magicians.org/t/erc-8414-token-bound-task-tenders/29597},
+  {\natexlab{b}}.
+\newblock Draft, accessed October 2026.
+
+\bibitem[Ausubel et~al.(2014)Ausubel, Cramton, Pycia, Rostek, and
+  Weretka]{ausubel2014}
+Lawrence~M. Ausubel, Peter Cramton, Marek Pycia, Marzena Rostek, and Marek
+  Weretka.
+\newblock Demand reduction and inefficiency in multi-unit auctions.
+\newblock \emph{The Review of Economic Studies}, 81\penalty0 (4):\penalty0
+  1366--1400, 2014.
+
+\bibitem[Crapis et~al.(2026)Crapis, Lim, Tay, and Chooi]{erc8183}
+Davide Crapis, Bryan Lim, Weixiong Tay, and Zuhwa Chooi.
+\newblock {ERC-8183}: Agentic commerce.
+\newblock Ethereum Improvement Proposals,
+  \url{https://eips.ethereum.org/EIPS/eip-8183}, 2026.
+\newblock Accessed October 2026.
+
+\bibitem[Daian et~al.(2020)Daian, Goldfeder, Kell, Li, Zhao, Bentov,
+  Breidenbach, and Juels]{daian2020}
+Philip Daian, Steven Goldfeder, Tyler Kell, Yunqi Li, Xueyuan Zhao, Iddo
+  Bentov, Lorenz Breidenbach, and Ari Juels.
+\newblock Flash boys 2.0: Frontrunning in decentralized exchanges, miner
+  extractable value, and consensus instability.
+\newblock In \emph{2020 IEEE Symposium on Security and Privacy}, pages
+  910--927, 2020.
+
+\bibitem[de~Moura and Ullrich(2021)]{demoura2021}
+Leonardo de~Moura and Sebastian Ullrich.
+\newblock The {L}ean 4 theorem prover and programming language.
+\newblock In \emph{Automated Deduction -- CADE 28}, volume 12699 of
+  \emph{Lecture Notes in Computer Science}, pages 625--635. Springer, 2021.
+
+\bibitem[Galal and Youssef(2018)]{galal2018}
+Hisham~S. Galal and Amr~M. Youssef.
+\newblock Verifiable sealed-bid auction on the {E}thereum blockchain.
+\newblock In \emph{Financial Cryptography and Data Security: FC 2018
+  International Workshops}. Springer, 2018.
+
+\bibitem[Krishna(2010)]{krishna2010}
+Vijay Krishna.
+\newblock \emph{Auction Theory}.
+\newblock Academic Press, 2nd edition, 2010.
+
+\bibitem[McAfee and Vincent(1997)]{mcafee1997}
+R.~Preston McAfee and Daniel~R. Vincent.
+\newblock Sequentially optimal auctions.
+\newblock \emph{Games and Economic Behavior}, 18\penalty0 (2):\penalty0
+  246--276, 1997.
+
+\bibitem[Milgrom(2004)]{milgrom2004}
+Paul Milgrom.
+\newblock \emph{Putting Auction Theory to Work}.
+\newblock Cambridge University Press, 2004.
+
+\bibitem[Myerson(1981)]{myerson1981}
+Roger~B. Myerson.
+\newblock Optimal auction design.
+\newblock \emph{Mathematics of Operations Research}, 6\penalty0 (1):\penalty0
+  58--73, 1981.
+\newblock \doi{10.1287/moor.6.1.58}.
+
+\bibitem[Riley and Samuelson(1981)]{riley1981}
+John~G. Riley and William~F. Samuelson.
+\newblock Optimal auctions.
+\newblock \emph{The American Economic Review}, 71\penalty0 (3):\penalty0
+  381--392, 1981.
+
+\bibitem[Vickrey(1961)]{vickrey1961}
+William Vickrey.
+\newblock Counterspeculation, auctions, and competitive sealed tenders.
+\newblock \emph{The Journal of Finance}, 16\penalty0 (1):\penalty0 8--37, 1961.
+
+\bibitem[Yan(2026{\natexlab{a}})]{repo}
+Shenton Yan.
+\newblock sealed-bid-award-erc: Draft {ERC}, reference implementation, proofs
+  and analysis.
+\newblock \url{https://github.com/shentonyan/sealed-bid-award-erc},
+  2026{\natexlab{a}}.
+
+\bibitem[Yan(2026{\natexlab{b}})]{thread29814}
+Shenton Yan.
+\newblock Sealed-bid award mechanism for task tenders (companion to {ERC-8183},
+  8195, 8414).
+\newblock Ethereum Magicians discussion,
+  \url{https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814},
+  2026{\natexlab{b}}.
+
+\bibitem[Yokoo et~al.(2004)Yokoo, Sakurai, and Matsubara]{yokoo2004}
+Makoto Yokoo, Yuko Sakurai, and Shigeo Matsubara.
+\newblock The effect of false-name bids in combinatorial auctions: New fraud in
+  internet auctions.
+\newblock \emph{Games and Economic Behavior}, 46\penalty0 (1):\penalty0
+  174--188, 2004.
+\newblock \doi{10.1016/S0899-8256(03)00045-9}.
+
+\end{thebibliography}
