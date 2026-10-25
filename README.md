@@ -5,12 +5,12 @@
 **Who wins a task, and at what price — a draft ERC for agent task markets on Ethereum.**
 
 [![CI](https://github.com/shentonyan/sealed-bid-award-erc/actions/workflows/ci.yml/badge.svg)](https://github.com/shentonyan/sealed-bid-award-erc/actions/workflows/ci.yml)
-[![Status: pre-ERC draft](https://img.shields.io/badge/status-pre--ERC%20draft-8250df)](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814)
+[![Status: Draft submission](https://img.shields.io/badge/status-Draft%20submission-8250df)](https://github.com/ethereum/ERCs/pull/2114)
 [![Solidity 0.8.24](https://img.shields.io/badge/solidity-0.8.24-363636?logo=solidity)](src/)
 [![Lean 4 proofs](https://img.shields.io/badge/Lean%204-proofs%20checked%20in%20CI-0b7285)](proofs/)
 [![License: CC0-1.0](https://img.shields.io/badge/license-CC0--1.0-lightgrey)](LICENSE.md)
 
-[Draft ERC](erc/erc-draft_sealed_bid_award.md) ·
+[ERC submission](https://github.com/ethereum/ERCs/pull/2114) · [Draft mirror](erc/erc-draft_sealed_bid_award.md) ·
 [Discussion](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814) ·
 [Reference contracts](src/) ·
 [Proof](proofs/) ·
@@ -34,9 +34,9 @@ choose among several agents who want the same task. This proposal fills only tha
 sealed-bid award that any of the three can consume, without holding task funds or acting on
 the task.
 
-> **Status.** Pre-ERC community draft. The ERC number is assigned by the EIP editors when the
-> PR to [ethereum/ERCs](https://github.com/ethereum/ERCs) is opened; this repository does not
-> claim one. Once that PR exists it is the normative text, and `erc/` is a mirror.
+> **Status.** Submitted to [ethereum/ERCs as PR #2114](https://github.com/ethereum/ERCs/pull/2114)
+> with specification status `Draft`. An ERC number has not been assigned; this repository
+> does not claim one. The submission is the proposed normative text, and `erc/` is its mirror.
 
 ## What it specifies
 

@@ -49,3 +49,19 @@ JavaScript/EVM tests and both core-Lean proof files are run locally. Foundry fuz
 tests run in repository CI. Lean proves the mathematical models; correspondence
 with Solidity is exercised on finite test grids, not proved for all executions.
 The ERC repository's own review and CI may request further editorial changes.
+
+## Submitted PR and upstream preflight
+
+Submitted as https://github.com/ethereum/ERCs/pull/2114 with status `Draft`.
+Development CI run 40210495199 passed: 1,046 JavaScript/EVM assertions, 30 Foundry
+tests (including fuzzing), and both Lean files with the axiom checks.
+
+Upstream spelling, Markdown, link and security checks passed. The upstream
+`eipw-action` rejects the `erc-draft_...` filename before inspecting its contents
+because its filename parser accepts a numeric suffix only. The submission keeps
+the official pre-number draft convention rather than claiming a number.
+
+The same document was also checked locally with `eipw-lint-js`, upstream
+`config/eipw.toml`, and dependency files from the upstream corpus. Adding a
+temporary local-only number and filename yielded zero diagnostics. That number
+was never committed or submitted. Editor number assignment is still pending.
