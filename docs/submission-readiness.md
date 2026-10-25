@@ -65,3 +65,11 @@ The same document was also checked locally with `eipw-lint-js`, upstream
 `config/eipw.toml`, and dependency files from the upstream corpus. Adding a
 temporary local-only number and filename yielded zero diagnostics. That number
 was never committed or submitted. Editor number assignment is still pending.
+
+## HTML build correction
+
+The initial full-site HTMLProofer run reported six broken attachment links. The
+ERC website merge step renames `assets/erc-*` directories to `assets/eip-*`, but
+does not rewrite links in the proposal. The submitted assets and their links now
+use `assets/eip-draft_sealed_bid_award/` directly, so the same paths resolve in
+the repository and in the built website. No CI checks or workflow files changed.

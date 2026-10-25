@@ -135,7 +135,7 @@ The same commands work in Windows PowerShell; run them one per line.
 | Path | What it is |
 | --- | --- |
 | [`erc/`](erc/) | The draft ERC text |
-| [`assets/erc-draft_sealed_bid_award/`](assets/erc-draft_sealed_bid_award/) | Exactly what goes into the ERCs PR: interfaces, reference contracts, test vectors |
+| [`assets/eip-draft_sealed_bid_award/`](assets/eip-draft_sealed_bid_award/) | Exactly what goes into the ERCs PR: interfaces, reference contracts, test vectors |
 | [`src/`](src/) | The same contracts as the working source, plus two ERC-8414 adapters in [`adapters/`](src/adapters/) |
 | [`vectors/`](vectors/) | Golden vectors: bids in commit order, reserve, units, expected award per rule |
 | [`test/`](test/) | Foundry and JS suites, and test-only mocks |
