@@ -34,7 +34,7 @@ async function main() {
   ok((await h.call(adapter, "supportsInterface", ["0x9977db15"])).out[0] === true, "adapter declares ITaskVerifier (8414 id)");
 
   // Requester A1 mints the task: reward 100, one completion, adapter in the judgment slot.
-  await h.call(task, "mint", [TOKEN, A(1), adapter.address, REWARD, 1n], { from: A(1), value: REWARD });
+  await h.call(task, "mint", [TOKEN, A(1), adapter.address, REWARD, 1n, keccak256(toUtf8Bytes("task spec v1"))], { from: A(1), value: REWARD });
   const H1 = keccak256(toUtf8Bytes("task spec v1"));
   const H2 = keccak256(toUtf8Bytes("task spec v2"));
   await h.call(task, "updateTask", [TOKEN, H1], { from: A(1) });

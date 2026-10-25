@@ -44,9 +44,10 @@ contract MockTaskToken {
     event FulfillmentSubmitted(uint256 indexed tokenId, uint256 indexed submissionId, address indexed fulfiller, bytes32 resultHash);
     event FulfillmentAccepted(uint256 indexed tokenId, uint256 indexed submissionId, address indexed fulfiller, uint256 reward);
 
-    function mint(uint256 tokenId, address updateAuthority, address acceptanceAuthority, uint256 reward, uint64 maxCompletions)
+    function mint(uint256 tokenId, address updateAuthority, address acceptanceAuthority, uint256 reward, uint64 maxCompletions, bytes32 taskHash)
         external
         payable
+        virtual
     {
         require(updateAuthorityOf[tokenId] == address(0), "exists");
         uint256 ns = tokenId >> 96;
@@ -55,6 +56,7 @@ contract MockTaskToken {
         acceptanceAuthorityOf[tokenId] = acceptanceAuthority;
         _terms[tokenId] = TenderTerms(address(0), reward, maxCompletions, 0, 0, 0, 0, 1 days);
         escrowBalanceOf[tokenId] = msg.value;
+        taskHashOf[tokenId] = taskHash;
     }
 
     function updateTask(uint256 tokenId, bytes32 taskHash) external {

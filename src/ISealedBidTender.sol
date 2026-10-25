@@ -39,7 +39,7 @@ interface ISealedBidTender {
         address slashRecipient; // where slashed bonds go; MUST be non-zero when bond > 0
         uint256 maxBidders; // commitments accepted per tender; MUST be >= 1 and <= the implementation's limit
         bytes4 integrationProfile; // AwardProfiles.PRICE_BINDING or AwardProfiles.ALLOCATION_ONLY
-        bytes32 contentHash; // hash of the task content the bids price; fixed at opening
+        bytes32 contentHash; // commits work, payment denomination and acceptance policy; fixed at opening
     }
 
     event TenderOpened(

@@ -10,9 +10,11 @@ import "../IAwardMechanism.sol";
 ///      an address can be minted only by that address. That reservation is what makes
 ///      execution impossible to pre-empt (see `AwardThenMint`).
 interface ITaskMinter {
-    function mint(uint256 tokenId, address updateAuthority, address acceptanceAuthority, uint256 reward, uint64 maxCompletions)
+    function mint(uint256 tokenId, address updateAuthority, address acceptanceAuthority, uint256 reward, uint64 maxCompletions, bytes32 taskHash)
         external
         payable;
+
+    function taskHashOf(uint256 tokenId) external view returns (bytes32);
 }
 
 interface ITaskVerifierGated {
@@ -102,8 +104,20 @@ contract AwardThenMint is ITaskVerifierGated {
         return (uint256(uint160(address(this))) << 96) | uint256(nonce);
     }
 
+    /// @notice Descriptor commitment: version, work, payment chain/asset/unit and verifier.
+    /// @dev This example pays native smallest units. The verifier must be immutable and
+    ///      its configuration must be bound by its address; upgradeable verifiers do not
+    ///      satisfy this example's price-binding assumptions.
+    function contentHashFor(bytes32 workHash, address inner) public view returns (bytes32) {
+        return keccak256(abi.encode(
+            keccak256("sealed-bid.task.native.v1"), workHash, block.chainid,
+            address(0), uint256(1), inner
+        ));
+    }
+
     /// @notice Open a price-binding tender for a task that will be minted after the award.
     ///         msg.value is the reserve and is escrowed here until settlement.
+    /// @param taskHash Hash of the work description, expanded to a descriptor commitment below.
     function open(
         address taskContract,
         bytes32 taskHash,
@@ -116,7 +130,9 @@ contract AwardThenMint is ITaskVerifierGated {
         uint256 maxBidders
     ) external payable nonReentrant returns (bytes32 tenderId) {
         require(msg.value > 0, "escrow the reserve");
+        require(taskHash != bytes32(0), "zero content hash");
         require(inner != address(0) && taskContract != address(0), "zero address");
+        taskHash = contentHashFor(taskHash, inner);
         require(slashRecipient != msg.sender, "requester cannot receive slashes");
         uint256 tokenId = nextTokenId();
         nonce++;
@@ -170,8 +186,9 @@ contract AwardThenMint is ITaskVerifierGated {
             price = a[0].price; // the tender guarantees price <= reserve == escrow
             j.winner = a[0].winner;
             ITaskMinter(j.taskContract).mint{value: price}(
-                j.tokenId, address(this), address(this), price, 1
+                j.tokenId, address(this), address(this), price, 1, j.taskHash
             );
+            require(ITaskMinter(j.taskContract).taskHashOf(j.tokenId) == j.taskHash, "minted content mismatch");
         }
         uint256 refund = j.escrow - price;
         refundOf[j.requester] += refund;
@@ -202,6 +219,7 @@ contract AwardThenMint is ITaskVerifierGated {
         if (tenderId == bytes32(0)) return false;
         Job storage j = jobOf[tenderId];
         if (!j.settled || j.winner == address(0) || fulfiller != j.winner) return false;
+        if (ITaskMinter(taskContract).taskHashOf(tokenId) != j.taskHash) return false;
         return ITaskVerifierGated(j.inner).verifyFulfillment(taskContract, tokenId, submissionId, fulfiller, resultHash, proof);
     }
 }

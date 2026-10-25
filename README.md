@@ -55,10 +55,11 @@ the task.
 
 ## Why second-price is the default
 
-The design follows Myerson (1981), *Optimal Auction Design*, read as a procurement problem.
-The revelation principle fixes the interface shape. Revenue equivalence says a standard only
-needs to fix the allocation rule and the reserve. The second-price payment rule needs no
-beliefs about other bidders' costs.
+The interface separates allocation and payment, as in direct mechanisms in auction theory.
+The single-unit second-price rule needs no beliefs about other bidders' private costs to
+make truthful reporting weakly dominant under quasi-linear utilities, no collusion or
+externalities, and the integration commitments below. Revenue equivalence has additional
+equilibrium and boundary-utility assumptions; it does not make arbitrary plugins equivalent.
 
 Running the auction on a public chain adds a reason specific to Ethereum. Reveals are public
 and arrive one by one, so a bidder who reveals last can hold several commitments and open
@@ -72,7 +73,7 @@ worth nothing, because truthful bidding is optimal whatever the others bid.
 
 ### When the truthfulness result applies
 
-Truthful bidding is dominant for the award rule on its own. Whether it survives depends on
+In the private-cost, quasi-linear model, truthful bidding is weakly dominant for the single-unit Vickrey allocation and payment rule. Whether it survives depends on
 what the target does with the award. SergeevDmitry showed on the discussion thread that a
 fixed reward breaks it ([post #5](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/5)), and
 chugarchugarr proposed separating price-binding from allocation-only integrations
@@ -93,6 +94,19 @@ The full numbers, including the value of the reserve and the effect of phantom c
 are in [`analysis/`](analysis/). The dominance property is proved for all inputs in
 [`proofs/VickreyTruthful.lean`](proofs/VickreyTruthful.lean), and its limits in
 [`proofs/IntegrationProfiles.lean`](proofs/IntegrationProfiles.lean).
+
+## Task content and payment denomination
+
+`contentHash` commits the work, payment denomination and acceptance policy at opening.
+`bondAsset` is only the bond asset. The target or adapter publishes the descriptor encoding.
+The native-asset `AwardThenMint` example computes
+`keccak256(abi.encode(keccak256("sealed-bid.task.native.v1"), workHash, block.chainid, address(0), uint256(1), inner))`:
+one integer unit is one native smallest unit, and `inner` identifies an immutable verifier
+whose configuration is fixed by that deployment. `open` accepts `workHash`; `contentHashFor`
+lets bidders reproduce the full descriptor hash. `settle` passes it to the task's mint
+function and checks `taskHashOf` in the same transaction. Fulfillment checks the hash again.
+The example mint and content-view surfaces are integration requirements, not ERC-8414 kernel
+interfaces; the test token is a mock, not a conforming ERC-8414 implementation.
 
 ## What is checked, and where
 
@@ -155,7 +169,7 @@ revealed in, and a stable sort is what makes "ties go to the earlier commit" hol
   escrows the reserve when opening the tender, and the token id is reserved in the
   adapter's own minter namespace so nobody can mint it first. Once the tender's reveal window
   has closed, anyone can call `settle`, which in one transition finalizes the tender if
-  needed, mints the task token with `rewardPerCompletion = Award.price`, funds it from the
+  needed, mints the task token with `rewardPerCompletion = Award.price`, initialises it with the committed task content, checks the resulting hash, funds it from the
   escrow and credits the rest back to the requester. The token's acceptance authority pays
   only the winner, and only for work an inner verifier accepts. This is the route on which
   truthful bidding under `award.vickrey` actually holds.

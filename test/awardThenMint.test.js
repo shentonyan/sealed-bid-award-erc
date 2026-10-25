@@ -29,14 +29,21 @@ async function main() {
   const resultFor = (who) => keccak256(coder.encode(["bytes", "address"], [ANSWER, who]));
   const PRICE_BINDING = keccak256(toUtf8Bytes("profile.price-binding")).slice(0, 10);
 
-  const TASK_HASH = keccak256(toUtf8Bytes("task package v1"));
+  const WORK_HASH = keccak256(toUtf8Bytes("task package v1"));
+  const TASK_HASH = (await h.call(atm, "contentHashFor", [WORK_HASH, inner.address])).out[0];
+  ok(TASK_HASH === keccak256(coder.encode(
+    ["bytes32", "bytes32", "uint256", "address", "uint256", "address"],
+    [keccak256(toUtf8Bytes("sealed-bid.task.native.v1")), WORK_HASH, 1n, "0x" + "00".repeat(20), 1n, inner.address]
+  )), "descriptor binds work, chain, native smallest-unit denomination and verifier");
   const TOKEN = (await h.call(atm, "nextTokenId", [])).out[0];
   ok(TOKEN >> 96n === BigInt(atm.address), "token id lies in the adapter's minter namespace");
   const T0 = h.now();
   const openArgs = (hash) => [task.address, hash, inner.address, vickrey.address, T0 + 100n, T0 + 200n, BOND, SINK, 16n];
 
+  await rejects(h.call(atm, "open", openArgs("0x" + "00".repeat(32)), { from: A(1), value: RESERVE }), /zero content hash/, "empty task content is refused");
+
   // ── Requester A1 opens and escrows the reserve ────────────────────────────────
-  const opened = await h.call(atm, "open", openArgs(TASK_HASH), { from: A(1), value: RESERVE });
+  const opened = await h.call(atm, "open", openArgs(WORK_HASH), { from: A(1), value: RESERVE });
   const tenderId = opened.out[0];
   ok(opened.logs.find((l) => l.name === "JobOpened").args.taskHash === TASK_HASH, "task hash recorded at open");
   ok((await h.balance(atm.address)) === RESERVE, "reserve escrowed in the adapter");
@@ -49,7 +56,7 @@ async function main() {
 
   // ── The reserved id cannot be pre-empted (execution-binding) ─────────────────────
   for (const squatter of [A(1), A(3), A(9)]) {
-    await rejects(h.call(task, "mint", [TOKEN, squatter, squatter, 1n, 1n], { from: squatter }), /not your namespace/, "no one else can mint the reserved id");
+    await rejects(h.call(task, "mint", [TOKEN, squatter, squatter, 1n, 1n, TASK_HASH], { from: squatter }), /not your namespace/, "no one else can mint the reserved id");
   }
   await rejects(h.call(atm, "open", openArgs(keccak256(toUtf8Bytes("other"))), { from: A(1) }), /escrow the reserve/, "no escrow, no tender");
 
@@ -67,6 +74,7 @@ async function main() {
   const ev = settled.logs.find((l) => l.name === "JobSettled").args;
   ok(ev.winner.toLowerCase() === A(3) && ev.price === 60n && ev.refund === 40n, "settled: A3 at 60, 40 back to the requester");
   ok((await h.call(task, "updateAuthorityOf", [TOKEN])).out[0].toLowerCase() === atm.address.toLowerCase(), "token minted with the adapter as update authority");
+  ok((await h.call(task, "taskHashOf", [TOKEN])).out[0] === TASK_HASH, "minted task content equals the commitment bidders priced");
   await rejects(h.call(task, "updateTask", [TOKEN, keccak256(toUtf8Bytes("changed spec"))], { from: A(1) }), /only update authority/, "requester cannot change the task after the award (Ted, 8414 #28)");
   ok((await h.call(task, "acceptanceAuthorityOf", [TOKEN])).out[0].toLowerCase() === atm.address.toLowerCase(), "adapter is the acceptance authority");
   ok((await h.call(task, "tenderTermsOf", [TOKEN])).out[0].rewardPerCompletion === 60n, "rewardPerCompletion = Award.price");
@@ -104,6 +112,26 @@ async function main() {
   // ── The adapter only answers the task contract itself ─────────────────────────
   const direct = await h.call(atm, "verifyFulfillment", [task.address, TOKEN, win, A(3), resultFor(A(3)), ANSWER], { from: A(9) });
   ok(direct.out[0] === false, "verifyFulfillment from a non-task caller returns false");
+
+  // A minter that ignores the hash must not leave a funded task or a consumed award.
+  const faulty = await h.deploy("FaultyContentTask");
+  const token3 = (await h.call(atm, "nextTokenId", [])).out[0];
+  const T2 = h.now();
+  const id3 = (await h.call(atm, "open", [faulty.address, WORK_HASH, inner.address, vickrey.address, T2 + 100n, T2 + 200n, BOND, SINK, 16n], { from: A(1), value: RESERVE })).out[0];
+  await h.call(tender, "commitBid", [id3, commitment(id3, A(3), 40n, salt(3))], { from: A(3), value: BOND });
+  h.warp(T2 + 150n);
+  await h.call(tender, "revealBid", [id3, 40n, salt(3)], { from: A(3) });
+  h.warp(T2 + 201n);
+  await rejects(h.call(atm, "settle", [id3]), /minted content mismatch/, "incorrect initial content rolls settlement back");
+  ok((await h.call(faulty, "updateAuthorityOf", [token3])).out[0] === "0x" + "00".repeat(20), "failed mint leaves no task behind");
+  ok((await h.call(tender, "awardOf", [id3])).out[0].length === 0, "failed atomic settlement rolls finalization back");
+  await h.call(faulty, "setCorrect", [true]);
+  await h.call(atm, "settle", [id3]);
+  ok((await h.call(faulty, "taskHashOf", [token3])).out[0] === TASK_HASH, "a correctly initialised task can settle");
+  const verifierArgs = [faulty.address, token3, 1n, A(3), resultFor(A(3)), ANSWER];
+  ok((await h.call(atm, "verifyFulfillment", verifierArgs, { from: faulty.address })).out[0], "matching content admits verified winner");
+  await h.call(faulty, "corrupt", [token3]);
+  ok(!(await h.call(atm, "verifyFulfillment", verifierArgs, { from: faulty.address })).out[0], "content drift stops fulfillment eligibility");
 
   console.log(`award-then-mint: ${passed} assertions passed`);
 }
