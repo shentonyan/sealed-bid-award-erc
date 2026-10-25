@@ -73,3 +73,9 @@ ERC website merge step renames `assets/erc-*` directories to `assets/eip-*`, but
 does not rewrite links in the proposal. The submitted assets and their links now
 use `assets/eip-draft_sealed_bid_award/` directly, so the same paths resolve in
 the repository and in the built website. No CI checks or workflow files changed.
+
+Upstream run 40212331301 confirmed that HTMLProofer and DNS Validator pass for
+the attachment-path fix. The numeric-filename validator still requires editor
+action, requested in PR comment 6400244707. A separate local run of
+`markdownlint-cli2` with the upstream configuration found two missing blank lines
+before citation fences; those are corrected and the local Markdown run is clean.
