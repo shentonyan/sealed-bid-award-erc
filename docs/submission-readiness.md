@@ -1,4 +1,14 @@
-# Draft submission review — 2026-10-26
+# ERC-8469 submission review
+
+## Current status — 2026-10-27
+
+Editor associate abcoathup assigned ERC-8469 in PR review comment 4384323800
+and supplied the updated forum URL in comment 4384333447. Both suggestions are
+applied: `eip: 8469`, `ERCS/erc-8469.md`, `assets/eip-8469/`, and the new
+`discussions-to` URL. The `created` date is the number-assignment date, 2026-10-27.
+The earlier notes below describe the pre-number submission history.
+
+## Initial review — 2026-10-26
 
 The ERC submission contains the specification, two interfaces, the tender, four
 mechanisms and their base contract, and JSON award vectors. The adapters are

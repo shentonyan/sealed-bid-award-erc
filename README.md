@@ -1,6 +1,6 @@
 <div align="center">
 
-# Sealed-Bid Award Mechanism for Task Tenders
+# ERC-8469: Sealed-Bid Award Mechanism for Task Tenders
 
 **Who wins a task, and at what price — a draft ERC for agent task markets on Ethereum.**
 
@@ -10,8 +10,8 @@
 [![Lean 4 proofs](https://img.shields.io/badge/Lean%204-proofs%20checked%20in%20CI-0b7285)](proofs/)
 [![License: CC0-1.0](https://img.shields.io/badge/license-CC0--1.0-lightgrey)](LICENSE.md)
 
-[ERC submission](https://github.com/ethereum/ERCs/pull/2114) · [Draft mirror](erc/erc-draft_sealed_bid_award.md) ·
-[Discussion](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814) ·
+[ERC submission](https://github.com/ethereum/ERCs/pull/2114) · [Draft mirror](erc/erc-8469.md) ·
+[Discussion](https://ethereum-magicians.org/t/erc-8469-sealed-bid-award-mechanism-for-task-tenders/29814) ·
 [Reference contracts](src/) ·
 [Proof](proofs/) ·
 [Analysis](analysis/) ·
@@ -35,8 +35,8 @@ sealed-bid award that any of the three can consume, without holding task funds o
 the task.
 
 > **Status.** Submitted to [ethereum/ERCs as PR #2114](https://github.com/ethereum/ERCs/pull/2114)
-> with specification status `Draft`. An ERC number has not been assigned; this repository
-> does not claim one. The submission is the proposed normative text, and `erc/` is its mirror.
+> with specification status `Draft`. Editor associate abcoathup assigned **ERC-8469** on
+> 2026-10-27. The proposal is awaiting review and merge; `erc/` mirrors the submission.
 
 ## What it specifies
 
@@ -75,9 +75,9 @@ worth nothing, because truthful bidding is optimal whatever the others bid.
 
 In the private-cost, quasi-linear model, truthful bidding is weakly dominant for the single-unit Vickrey allocation and payment rule. Whether it survives depends on
 what the target does with the award. SergeevDmitry showed on the discussion thread that a
-fixed reward breaks it ([post #5](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/5)), and
+fixed reward breaks it ([post #5](https://ethereum-magicians.org/t/erc-8469-sealed-bid-award-mechanism-for-task-tenders/29814/5)), and
 chugarchugarr proposed separating price-binding from allocation-only integrations
-([post #7](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/7)). It holds only if the target
+([post #7](https://ethereum-magicians.org/t/erc-8469-sealed-bid-award-mechanism-for-task-tenders/29814/7)). It holds only if the target
 
 - **(a) is payment-binding:** it pays the winner `Award.price`, and
 - **(b) is execution-binding:** once the award is final, anyone can trigger its execution, and
@@ -135,7 +135,7 @@ The same commands work in Windows PowerShell; run them one per line.
 | Path | What it is |
 | --- | --- |
 | [`erc/`](erc/) | The draft ERC text |
-| [`assets/eip-draft_sealed_bid_award/`](assets/eip-draft_sealed_bid_award/) | Exactly what goes into the ERCs PR: interfaces, reference contracts, test vectors |
+| [`assets/eip-8469/`](assets/eip-8469/) | Exactly what goes into the ERCs PR: interfaces, reference contracts, test vectors |
 | [`src/`](src/) | The same contracts as the working source, plus two ERC-8414 adapters in [`adapters/`](src/adapters/) |
 | [`vectors/`](vectors/) | Golden vectors: bids in commit order, reserve, units, expected award per rule |
 | [`test/`](test/) | Foundry and JS suites, and test-only mocks |
@@ -182,30 +182,30 @@ revealed in, and a stable sort is what makes "ties go to the earlier commit" hol
 
 The integration profiles, `award.posted-price`, `AwardThenMint`, the finality rule, the
 award checks, the false-name caveat and content binding came out of review on Ethereum
-Magicians, mostly on the [discussion thread](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814):
+Magicians, mostly on the [discussion thread](https://ethereum-magicians.org/t/erc-8469-sealed-bid-award-mechanism-for-task-tenders/29814):
 
-- **SergeevDmitry** ([post #5](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/5)) gave the counterexample showing that ranking by bid
+- **SergeevDmitry** ([post #5](https://ethereum-magicians.org/t/erc-8469-sealed-bid-award-mechanism-for-task-tenders/29814/5)) gave the counterexample showing that ranking by bid
   under a fixed reward is not truthful. It is now the theorem `fixed_reward_not_truthful` in
   [`proofs/IntegrationProfiles.lean`](proofs/IntegrationProfiles.lean).
-- **chugarchugarr** ([post #7](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/7)) proposed the split into price-binding and
+- **chugarchugarr** ([post #7](https://ethereum-magicians.org/t/erc-8469-sealed-bid-award-mechanism-for-task-tenders/29814/7)) proposed the split into price-binding and
   allocation-only integrations, put it as IC(award) ≠ IC(target ∘ award), and suggested
-  awarding before an ERC-8414 token is minted. In [post #10](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/10) they named the two
+  awarding before an ERC-8414 token is minted. In [post #10](https://ethereum-magicians.org/t/erc-8469-sealed-bid-award-mechanism-for-task-tenders/29814/10) they named the two
   conditions payment-binding and execution-binding, pointed out that escrow is one way to
   meet execution-binding rather than its definition, and asked for one atomic settle
   transition. Applying that test to `AwardThenMint` exposed a real gap: the token id it
   would mint was not reserved, so anyone could mint it first and block settlement forever.
   The id is now reserved at open, and the squatting case is a test.
-- **predge-ai** ([post #11](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/11)) asked what happens if an award changes after a target
+- **predge-ai** ([post #11](https://ethereum-magicians.org/t/erc-8469-sealed-bid-award-mechanism-for-task-tenders/29814/11)) asked what happens if an award changes after a target
   has read it. The award here cannot change, since it is computed only from on-chain data,
   but the spec did not say so. It now makes `Awarded` and `Void` terminal, and the tests
   check that nothing reachable afterwards changes the award.
 
-- **Revinand** ([post #15](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/15)) found that `finalize` did not check that each winner
+- **Revinand** ([post #15](https://ethereum-magicians.org/t/erc-8469-sealed-bid-award-mechanism-for-task-tenders/29814/15)) found that `finalize` did not check that each winner
   had revealed a bid within the reserve, so a faulty mechanism could award a bidder who never
   revealed. The tender now checks every award against the revealed bids and pins the
   mechanism's code hash at opening, and the spec states that mechanisms must not be
   upgradeable and how bidders should check them.
-- **zexoverz** ([post #16](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814/16)) showed that uniform-price's one-unit-per-bidder limit is
+- **zexoverz** ([post #16](https://ethereum-magicians.org/t/erc-8469-sealed-bid-award-mechanism-for-task-tenders/29814/16)) showed that uniform-price's one-unit-per-bidder limit is
   really one unit per address, so an operator with two addresses can reduce demand. The
   Rationale and Security Considerations now say so, and a brute-force test finds the gain under
   uniform-price and confirms that single-unit Vickrey is immune.
@@ -221,7 +221,7 @@ Any errors in how these ideas were carried into the spec and code are the author
 ## Contributing
 
 Discussion of the design belongs in the
-[Magicians thread](https://ethereum-magicians.org/t/sealed-bid-award-mechanism-for-task-tenders-companion-to-erc-8183-8195-8414/29814).
+[Magicians thread](https://ethereum-magicians.org/t/erc-8469-sealed-bid-award-mechanism-for-task-tenders/29814).
 Issues and pull requests for the code, tests and proof are welcome here.
 
 ## Star history
