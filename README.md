@@ -108,13 +108,31 @@ function and checks `taskHashOf` in the same transaction. Fulfillment checks the
 The example mint and content-view surfaces are integration requirements, not ERC-8414 kernel
 interfaces; the test token is a mock, not a conforming ERC-8414 implementation.
 
+## Shared capacity across tenders
+
+If a target checks a provider's remaining service slots during `settle`, two final
+awards can compete for one slot and one execution can revert. Such a target needs
+capacity admission before accepting commitments, shared accounting across conflicting
+tenders, and an atomic handoff of the winning reservation into the task. Losers and
+void tenders release after finalization; winners retain capacity while the work needs it.
+If both awards execute and a provider later fails to perform, that is a separate
+fulfillment risk. The generic `AwardThenMint` example does not reserve service capacity.
+
+The [capacity integration notes](docs/capacity-admission.md) describe the boundary
+and the regression from [ted0x's review](https://ethereum-magicians.org/t/erc-8469-sealed-bid-award-mechanism-for-task-tenders/29814/21).
+`test/capacity.test.js` reproduces the late-check failure and exercises a separate
+admission example with one exclusive slot, including direct-entry bypass attempts,
+winning handoff, completion, and losing/void release. The admission mocks are not a
+production capacity registry or an operator-identity scheme. Resource feasibility
+does not extend the single-tender truthfulness result to joint multi-tender strategies.
+
 ## What is checked, and where
 
 Every push runs all three in [CI](.github/workflows/ci.yml).
 
 | Check | What it covers |
 | --- | --- |
-| `npm test` | Golden vectors for all four rules; the seven `award` conditions over an exhaustive 3-bidder grid; Vickrey dominance and posted-price acceptance dominance by brute force; the fixed-reward counterexample; false-name bids (uniform-price is exploitable with two addresses, single-unit Vickrey is not); the full tender lifecycle, including integration-profile checks; both ERC-8414 adapters end to end |
+| `npm test` | Golden vectors for all four rules; the seven `award` conditions over an exhaustive 3-bidder grid; Vickrey dominance and posted-price acceptance dominance by brute force; the fixed-reward counterexample; false-name bids (uniform-price is exploitable with two addresses, single-unit Vickrey is not); the full tender lifecycle, including integration-profile checks; both ERC-8414 adapters end to end; concurrent tenders competing for one slot, admission and reservation release |
 | `forge test` | The same lifecycle in Foundry, fuzzed monotonicity and truthfulness, and regression tests for the bidder cap, rejecting slash recipients, USDT-style bond tokens and commit-order tie-breaking; faulty mechanisms (a winner who never revealed, a winner above the reserve, a price below the winner's bid) and a mechanism whose code is swapped after opening |
 | `lean proofs/VickreyTruthful.lean` | Truthful bidding is weakly dominant under `award.vickrey`, for any reserve, any number of bidders in any commit order, and any deviation; no `sorry`, standard axioms only |
 | `lean proofs/IntegrationProfiles.lean` | With a fixed reward, ranking by bid is not truthful (the counterexample above); under `award.posted-price`, accepting exactly when cost ≤ reserve is weakly dominant |
@@ -215,6 +233,8 @@ Magicians, mostly on the [discussion thread](https://ethereum-magicians.org/t/er
   applies only to that content. `AwardThenMint` keeps the minted token's update authority so
   the requester cannot change the work after the reveals, and `AwardGatedVerifier` stops
   admitting the winner if the task changes.
+
+- **ted0x** ([post #21](https://ethereum-magicians.org/t/erc-8469-sealed-bid-award-mechanism-for-task-tenders/29814/21)) raised a provider winning two concurrent tenders with one service slot. The specification now distinguishes capacity-dependent award execution from later fulfillment, requires pre-commit admission where capacity is an execution precondition, and leaves registry design to a separate extension. Test-only examples reproduce the late-check failure and exercise reservation, handoff and release.
 
 Any errors in how these ideas were carried into the spec and code are the author's.
 

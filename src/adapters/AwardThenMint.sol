@@ -35,7 +35,11 @@ interface ITaskVerifierGated {
 ///      only if the integration is payment-binding (it pays Award.price) and execution-binding
 ///      (every non-empty award can be executed by anyone, and no one can withhold, pre-empt or
 ///      block that execution). The terms are chugarchugarr's, from the Ethereum Magicians thread
-///      (posts #7 and #10). This adapter gives both:
+///      (posts #7 and #10). This example assumes the target has no additional scarce-capacity
+///      precondition on mint. A target that checks provider availability during settlement
+///      needs an admission/reservation extension before accepting commitments; this adapter
+///      alone does not reserve service capacity or prove joint multi-tender truthfulness.
+///      Under those target assumptions the adapter provides the following bindings:
 ///        - the requester escrows the reserve when the tender opens, so the money to pay any
 ///          price up to the reserve is already committed;
 ///        - `settle` is permissionless, so once the tender is awarded anyone (typically the

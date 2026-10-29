@@ -10,7 +10,7 @@ contract FaultyContentTask is MockTaskToken {
     function setCorrect(bool value) external { correct = value; }
 
     function mint(uint256 tokenId, address updateAuthority, address acceptanceAuthority, uint256 reward, uint64 maxCompletions, bytes32 taskHash)
-        external payable override
+        public payable override
     {
         require(updateAuthorityOf[tokenId] == address(0), "exists");
         require(tokenId >> 96 == uint256(uint160(msg.sender)), "not your namespace");

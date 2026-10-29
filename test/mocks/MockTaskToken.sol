@@ -45,7 +45,7 @@ contract MockTaskToken {
     event FulfillmentAccepted(uint256 indexed tokenId, uint256 indexed submissionId, address indexed fulfiller, uint256 reward);
 
     function mint(uint256 tokenId, address updateAuthority, address acceptanceAuthority, uint256 reward, uint64 maxCompletions, bytes32 taskHash)
-        external
+        public
         payable
         virtual
     {

@@ -1,5 +1,24 @@
 # ERC-8469 submission review
 
+## Capacity review follow-up — 2026-10-29
+
+The response to ted0x's discussion post 21 adds capacity-dependent execution
+requirements and separates award execution from subsequent fulfillment. Scarce
+execution prerequisites are reserved before accepting commitments, enforced at
+the tender entry point, shared across conflicting tenders and handed to the
+target atomically. Losing/void reservations release only after finalization;
+winning service capacity remains held for the target's work lifecycle.
+
+The optional one-slot example and 29 regression assertions are described in
+[capacity-admission.md](capacity-admission.md). They reproduce the late-check
+failure and exercise admission bypass prevention, binding, handoff, completion,
+losing/void release and rollback. They are test-only integrations with trusted
+capacity identities, not a production registry or a joint multi-tender IC proof.
+
+The core interfaces and ABI are unchanged. The reference implementation's
+`commitBid` is `public virtual` to permit an admission subclass to call the core
+after its checks; default behavior is retained. Source and submission assets match.
+
 ## Current status — 2026-10-27
 
 Editor associate abcoathup assigned ERC-8469 in PR review comment 4384323800
